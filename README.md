@@ -41,8 +41,8 @@ Working with the best free database:
   - implementation of [node.js](https://nodejs.org/docs/latest/api/) and [express.js](https://expressjs.com/en/5x/api.html)
   - GET to "/debug": works with debug.tsx. just delivers which uid's to allow
   - POST to "/write": writes to theh database
-  >[!WARNING]
-  >to write you must submit a JSON.
+> [!WARNING]
+> to write you must submit a JSON.
   - POST to "/read": reads documents. submit a path
   - POST to "/signup": creates users
   - POST to "/login": fetches hashed passwords to authenticate users
@@ -85,7 +85,7 @@ CheckboxDropdown.tsx
 - optionCheck: __*Record<string, boolean### *__ that has the same key names as optionList, but also has boolean values attached to the keys.
 - onChange: Function that runs when the value is changed.
 
-> [! CAUTION]
+> [!CAUTION]
 > in Matchform.tsx this element is not used
 
 ### CounterInput
