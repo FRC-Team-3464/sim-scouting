@@ -1,8 +1,7 @@
-import { initializeApp } from "firebase/app";
 import { generateCookie } from "./user";
+import { API_BASE_URL } from "./config";
 
-const LINK = "https://scout4364i.vercel.app/api";
-//const LINK = "http://localhost:3000/api";
+const LINK = API_BASE_URL;
 
 async function sha256(message: string) {
     // Encode the message as a Uint8Array (UTF-8 is standard)
@@ -46,7 +45,6 @@ async function writeData(path: string, data: any) {
     }
 }
 export async function writeToDb(path: string, data: any) {
-    console.log(path);
     let p = await readDoc("/datas/data");
     p = p.team;
     if (p && !p.includes(data.teamNumber)) {
@@ -101,13 +99,11 @@ export async function registerUser(
             window.location.href = "/signup"
         }
         const data = await response.json();
-        let hashed = await sha256(password);
-        console.log(await hashed);
+        const hashed = await sha256(password);
         writeData(`auth/${name}`, { hashed: hashed });
         generateCookie("user", data.name, 7);
         
         window.location.href = "/";
-        console.log(data);
     } catch (error) {
         console.error("Error registering user:", error);
         alert("Registration failed. Please try again.");
@@ -132,7 +128,6 @@ export async function loginUser(email: string, password: string) {
             generateCookie("user", data.name, 7);
             generateCookie("uid", data.uid, 7);
             window.location.href = "/";
-            console.log(data);
         } else {
             if (res == 401) {
                 alert("Password or email invalid");

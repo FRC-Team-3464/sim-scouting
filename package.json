@@ -9,6 +9,7 @@
     "nodemon": "^3.1.11"
   },
   "scripts": {
-    "start": "nodemon ./backend/server.js"
+    "dev": "NODE_ENV=development nodemon ./backend/server.js",
+    "start": "NODE_ENV=production node ./backend/server.js"
   }
 }
