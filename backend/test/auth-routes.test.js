@@ -14,6 +14,8 @@ const expirationSeconds =
     Date.parse("2026-07-18T02:00:00.000Z") / 1000;
 
 const defaultConfiguration = {
+    corsAllowedOrigin: "http://localhost:5173",
+    csrfSecret: "a".repeat(64),
     firebaseWebApiKey: "test-firebase-web-api-key",
     sessionDurationMinutes: 360,
     sessionExpirationWarningMinutes: 30,
@@ -119,16 +121,17 @@ function createTestContext({
             };
         });
     const app = express();
+    const configuration = {
+        ...defaultConfiguration,
+        ...configurationOverrides,
+    };
 
     app.use(express.json());
     app.use(
         "/api/auth",
         createAuthenticationRouter({
             auth,
-            configuration: {
-                ...defaultConfiguration,
-                ...configurationOverrides,
-            },
+            configuration,
             authenticateWithPassword: authenticationFunction,
             logger,
         }),
@@ -139,21 +142,319 @@ function createTestContext({
         calls,
         logEntries,
         authenticationCalls,
+        configuration,
     };
 }
+
+/**
+ * Sends a browser-style POST with a valid signed CSRF token.
+ *
+ * The helper forwards both cookies issued by `/csrf`. Tests using it therefore
+ * reach the existing business validation and Firebase logic instead of being
+ * rejected at the new security boundary. Cookies are forwarded explicitly so
+ * production Secure-cookie behavior can still be tested over local HTTP.
+ *
+ * @param {ReturnType<typeof createTestContext>} context Test application context.
+ * @param {string} path Authentication endpoint path.
+ * @param {object | undefined} body Optional JSON request body.
+ * @param {number} expectedStatus Expected HTTP response status.
+ * @returns {Promise<import("supertest").Response>} Completed HTTP response.
+ */
+async function sendProtectedPost(context, path, body, expectedStatus) {
+    const csrfResponse = await request(context.app)
+        .get("/api/auth/csrf")
+        .set("Origin", context.configuration.corsAllowedOrigin)
+        .expect(200);
+    const csrfCookies = csrfResponse.headers["set-cookie"].map(
+        (cookie) => cookie.split(";")[0],
+    );
+    let protectedRequest = request(context.app)
+        .post(path)
+        .set("Origin", context.configuration.corsAllowedOrigin)
+        // Supertest correctly refuses to resend Secure cookies over its local
+        // HTTP transport. Forwarding only the issued cookie pairs explicitly
+        // lets the production-cookie test exercise CSRF without weakening the
+        // configured Secure attribute.
+        .set("Cookie", csrfCookies.join("; "))
+        .set("X-CSRF-Token", csrfResponse.body.csrfToken);
+
+    if (body !== undefined) {
+        protectedRequest = protectedRequest.send(body);
+    }
+
+    return protectedRequest.expect(expectedStatus);
+}
+
+test("GET /api/auth/csrf issues signed cookies and a non-cacheable token", async () => {
+    const context = createTestContext();
+
+    const response = await request(context.app)
+        .get("/api/auth/csrf")
+        .set("Origin", context.configuration.corsAllowedOrigin)
+        .expect(200);
+
+    assert.match(response.body.csrfToken, /^[a-f\d]{64}\.[a-f\d]{64}$/);
+    assert.equal(response.headers["cache-control"], "no-store");
+
+    const cookies = response.headers["set-cookie"];
+    const bindingCookie = cookies.find((cookie) =>
+        cookie.startsWith("csrf_binding="),
+    );
+    const tokenCookie = cookies.find((cookie) =>
+        cookie.startsWith("csrf_token="),
+    );
+
+    assert.ok(bindingCookie);
+    assert.match(bindingCookie, /HttpOnly/);
+    assert.match(bindingCookie, /Path=\//);
+    assert.match(bindingCookie, /SameSite=Lax/);
+    assert.ok(tokenCookie);
+    assert.match(
+        tokenCookie,
+        new RegExp(`^csrf_token=${response.body.csrfToken};`),
+    );
+    assert.doesNotMatch(tokenCookie, /HttpOnly/);
+    assert.match(tokenCookie, /Path=\//);
+    assert.match(tokenCookie, /SameSite=Lax/);
+    assert.equal(context.logEntries.length, 0);
+});
+
+test("GET /api/auth/csrf rejects an unexpected Origin without logging it", async () => {
+    const context = createTestContext();
+    const unexpectedOrigin = "https://attacker.example";
+
+    const response = await request(context.app)
+        .get("/api/auth/csrf")
+        .set("Origin", unexpectedOrigin)
+        .expect(403);
+
+    assert.deepEqual(response.body, {
+        message: "Request could not be verified",
+    });
+    assert.equal(
+        context.logEntries[0].event.category,
+        "CSRF_ORIGIN_REJECTED",
+    );
+    assert.equal(
+        JSON.stringify(context.logEntries).includes(unexpectedOrigin),
+        false,
+    );
+});
+
+test("state-changing auth routes require the exact configured Origin", async (t) => {
+    const cases = [
+        ["missing Origin", undefined],
+        ["unexpected Origin", "https://attacker.example"],
+    ];
+
+    for (const [name, origin] of cases) {
+        await t.test(name, async () => {
+            const context = createTestContext();
+            let protectedRequest = request(context.app)
+                .post("/api/auth/login")
+                .send({
+                    email: "scout@example.com",
+                    password: "private-password",
+                });
+
+            if (origin) {
+                protectedRequest = protectedRequest.set("Origin", origin);
+            }
+
+            const response = await protectedRequest.expect(403);
+
+            assert.deepEqual(response.body, {
+                message: "Request could not be verified",
+            });
+            assert.equal(
+                context.logEntries[0].event.category,
+                "CSRF_ORIGIN_REJECTED",
+            );
+            const serializedLogs = JSON.stringify(context.logEntries);
+            assert.equal(serializedLogs.includes("private-password"), false);
+            assert.equal(serializedLogs.includes(origin || "missing"), false);
+            assert.equal(context.authenticationCalls.length, 0);
+        });
+    }
+});
+
+test("state-changing auth routes reject invalid CSRF tokens", async (t) => {
+    const cases = [
+        ["missing cookies and header", null, null, "CSRF_TOKEN_MISSING"],
+        ["missing header", "issued", null, "CSRF_TOKEN_MISSING"],
+        ["malformed header", "issued", "malformed", "CSRF_TOKEN_INVALID"],
+        [
+            "mismatched header",
+            "issued",
+            `${"b".repeat(64)}.${"c".repeat(64)}`,
+            "CSRF_TOKEN_INVALID",
+        ],
+    ];
+
+    for (const [name, cookieMode, headerToken, category] of cases) {
+        await t.test(name, async () => {
+            const context = createTestContext();
+            const agent = request.agent(context.app);
+            let issuedToken;
+
+            if (cookieMode === "issued") {
+                const csrfResponse = await agent
+                    .get("/api/auth/csrf")
+                    .set("Origin", context.configuration.corsAllowedOrigin)
+                    .expect(200);
+                issuedToken = csrfResponse.body.csrfToken;
+            }
+
+            let protectedRequest = agent
+                .post("/api/auth/login")
+                .set("Origin", context.configuration.corsAllowedOrigin)
+                .send({
+                    email: "scout@example.com",
+                    password: "private-password",
+                });
+
+            if (headerToken) {
+                protectedRequest = protectedRequest.set(
+                    "X-CSRF-Token",
+                    headerToken === "issued" ? issuedToken : headerToken,
+                );
+            }
+
+            const response = await protectedRequest.expect(403);
+
+            assert.deepEqual(response.body, {
+                message: "Request could not be verified",
+            });
+            assert.equal(context.logEntries[0].event.category, category);
+            assert.equal(
+                JSON.stringify(context.logEntries).includes(
+                    headerToken || issuedToken || "unused-token",
+                ),
+                false,
+            );
+            assert.equal(context.authenticationCalls.length, 0);
+        });
+    }
+});
+
+test(
+    "registration and login reject non-JSON content types before validation",
+    async () => {
+        const context = createTestContext();
+        const agent = request.agent(context.app);
+        const csrfResponse = await agent
+            .get("/api/auth/csrf")
+            .set("Origin", context.configuration.corsAllowedOrigin)
+            .expect(200);
+
+        const response = await agent
+            .post("/api/auth/login")
+            .set("Origin", context.configuration.corsAllowedOrigin)
+            .set("X-CSRF-Token", csrfResponse.body.csrfToken)
+            .type("text/plain")
+            .send("email=scout@example.com")
+            .expect(415);
+
+        assert.deepEqual(response.body, {
+            message: "Content-Type must be application/json",
+        });
+        assert.equal(
+            context.logEntries[0].event.category,
+            "CSRF_CONTENT_TYPE_REJECTED",
+        );
+        assert.equal(context.authenticationCalls.length, 0);
+    },
+);
+
+test("CSRF tokens rotate from pre-authentication to Firebase session binding", async () => {
+    const context = createTestContext();
+    const initialCsrfResponse = await request(context.app)
+        .get("/api/auth/csrf")
+        .set("Origin", context.configuration.corsAllowedOrigin)
+        .expect(200);
+    const preAuthenticationCookies =
+        initialCsrfResponse.headers["set-cookie"].map(
+            (cookie) => cookie.split(";")[0],
+        );
+
+    const loginResponse = await request(context.app)
+        .post("/api/auth/login")
+        .set("Origin", context.configuration.corsAllowedOrigin)
+        .set("Cookie", preAuthenticationCookies.join("; "))
+        .set("X-CSRF-Token", initialCsrfResponse.body.csrfToken)
+        .send({
+            email: "scout@example.com",
+            password: "test-password",
+        })
+        .expect(200);
+    const loginCookies = loginResponse.headers["set-cookie"];
+    const sessionCookie = loginCookies
+        .find((cookie) => cookie.startsWith("session=test-session-cookie;"))
+        .split(";")[0];
+
+    assert.ok(
+        loginCookies.some((cookie) => cookie.startsWith("csrf_binding=;")),
+    );
+    assert.ok(
+        loginCookies.some((cookie) => cookie.startsWith("csrf_token=;")),
+    );
+
+    // A token signed before authentication must fail after the Firebase
+    // session cookie becomes the authoritative private binding.
+    await request(context.app)
+        .post("/api/auth/logout")
+        .set("Origin", context.configuration.corsAllowedOrigin)
+        .set(
+            "Cookie",
+            [sessionCookie, ...preAuthenticationCookies].join("; "),
+        )
+        .set("X-CSRF-Token", initialCsrfResponse.body.csrfToken)
+        .expect(403);
+
+    const sessionCsrfResponse = await request(context.app)
+        .get("/api/auth/csrf")
+        .set("Origin", context.configuration.corsAllowedOrigin)
+        .set("Cookie", sessionCookie)
+        .expect(200);
+    const sessionTokenCookie = sessionCsrfResponse.headers["set-cookie"]
+        .find((cookie) => cookie.startsWith("csrf_token="))
+        .split(";")[0];
+
+    assert.notEqual(
+        sessionCsrfResponse.body.csrfToken,
+        initialCsrfResponse.body.csrfToken,
+    );
+    const logoutResponse = await request(context.app)
+        .post("/api/auth/logout")
+        .set("Origin", context.configuration.corsAllowedOrigin)
+        .set("Cookie", `${sessionCookie}; ${sessionTokenCookie}`)
+        .set("X-CSRF-Token", sessionCsrfResponse.body.csrfToken)
+        .expect(204);
+
+    const clearedCookies = logoutResponse.headers["set-cookie"];
+    assert.ok(clearedCookies.some((cookie) => cookie.startsWith("session=;")));
+    assert.ok(
+        clearedCookies.some((cookie) => cookie.startsWith("csrf_binding=;")),
+    );
+    assert.ok(
+        clearedCookies.some((cookie) => cookie.startsWith("csrf_token=;")),
+    );
+});
 
 test("POST /api/auth/register creates a user and verified session", async () => {
     const context = createTestContext();
     const password = "  preserved-password  ";
 
-    const response = await request(context.app)
-        .post("/api/auth/register")
-        .send({
+    const response = await sendProtectedPost(
+        context,
+        "/api/auth/register",
+        {
             name: "  Scout Name  ",
             email: "  scout@example.com  ",
             password,
-        })
-        .expect(201);
+        },
+        201,
+    );
 
     assert.deepEqual(context.calls.createUser, [
         {
@@ -204,10 +505,12 @@ test("POST /api/auth/register creates a user and verified session", async () => 
 test("POST /api/auth/register requires name, email, and password", async () => {
     const context = createTestContext();
 
-    const response = await request(context.app)
-        .post("/api/auth/register")
-        .send({ email: "scout@example.com", password: "test-password" })
-        .expect(400);
+    const response = await sendProtectedPost(
+        context,
+        "/api/auth/register",
+        { email: "scout@example.com", password: "test-password" },
+        400,
+    );
 
     assert.deepEqual(response.body, {
         message: "Name, email, and password are required",
@@ -241,14 +544,16 @@ test("POST /api/auth/register maps expected Firebase Admin errors", async (t) =>
                 },
             });
 
-            const response = await request(context.app)
-                .post("/api/auth/register")
-                .send({
+            const response = await sendProtectedPost(
+                context,
+                "/api/auth/register",
+                {
                     name: "Scout Name",
                     email: "scout@example.com",
                     password: "test-password",
-                })
-                .expect(status);
+                },
+                status,
+            );
 
             assert.deepEqual(response.body, { message });
             assert.equal(context.logEntries[0].event.category, code);
@@ -271,14 +576,16 @@ test("POST /api/auth/register preserves the account after session failure", asyn
         },
     });
 
-    const response = await request(context.app)
-        .post("/api/auth/register")
-        .send({
+    const response = await sendProtectedPost(
+        context,
+        "/api/auth/register",
+        {
             name: "Scout Name",
             email: "scout@example.com",
             password: "test-password",
-        })
-        .expect(500);
+        },
+        500,
+    );
 
     assert.deepEqual(response.body, {
         message: "Account created, but automatic login failed. Please log in.",
@@ -296,13 +603,15 @@ test("POST /api/auth/login authenticates and sets a secure session cookie", asyn
         configurationOverrides: { sessionCookieSecure: true },
     });
 
-    const response = await request(context.app)
-        .post("/api/auth/login")
-        .send({
+    const response = await sendProtectedPost(
+        context,
+        "/api/auth/login",
+        {
             email: "  scout@example.com  ",
             password: "test-password",
-        })
-        .expect(200);
+        },
+        200,
+    );
 
     assert.equal(response.body.user.uid, "test-uid");
     assert.deepEqual(context.authenticationCalls, [
@@ -319,10 +628,12 @@ test("POST /api/auth/login authenticates and sets a secure session cookie", asyn
 test("POST /api/auth/login requires email and password", async () => {
     const context = createTestContext();
 
-    const response = await request(context.app)
-        .post("/api/auth/login")
-        .send({ email: "scout@example.com" })
-        .expect(400);
+    const response = await sendProtectedPost(
+        context,
+        "/api/auth/login",
+        { email: "scout@example.com" },
+        400,
+    );
 
     assert.deepEqual(response.body, {
         message: "Email and password are required",
@@ -344,13 +655,15 @@ test("POST /api/auth/login hides invalid and disabled account details", async (t
                 },
             });
 
-            const response = await request(context.app)
-                .post("/api/auth/login")
-                .send({
+            const response = await sendProtectedPost(
+                context,
+                "/api/auth/login",
+                {
                     email: "scout@example.com",
                     password: "private-password",
-                })
-                .expect(401);
+                },
+                401,
+            );
 
             assert.deepEqual(response.body, {
                 message: "Invalid email or password",
@@ -371,13 +684,15 @@ test("POST /api/auth/login maps Firebase rate limiting to 429", async () => {
         },
     });
 
-    const response = await request(context.app)
-        .post("/api/auth/login")
-        .send({
+    const response = await sendProtectedPost(
+        context,
+        "/api/auth/login",
+        {
             email: "scout@example.com",
             password: "test-password",
-        })
-        .expect(429);
+        },
+        429,
+    );
 
     assert.deepEqual(response.body, {
         message: "Too many authentication attempts. Please try again later.",
@@ -391,13 +706,15 @@ test("POST /api/auth/login hides unexpected Firebase failures", async () => {
         },
     });
 
-    const response = await request(context.app)
-        .post("/api/auth/login")
-        .send({
+    const response = await sendProtectedPost(
+        context,
+        "/api/auth/login",
+        {
             email: "scout@example.com",
             password: "test-password",
-        })
-        .expect(500);
+        },
+        500,
+    );
 
     assert.deepEqual(response.body, {
         message: "Login failed. Please try again.",
@@ -411,9 +728,12 @@ test("POST /api/auth/login hides unexpected Firebase failures", async () => {
 test("POST /api/auth/logout clears the session cookie idempotently", async () => {
     const context = createTestContext();
 
-    const response = await request(context.app)
-        .post("/api/auth/logout")
-        .expect(204);
+    const response = await sendProtectedPost(
+        context,
+        "/api/auth/logout",
+        undefined,
+        204,
+    );
 
     assert.equal(response.text, "");
     const clearCookie = response.headers["set-cookie"][0];

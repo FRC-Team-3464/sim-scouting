@@ -4,7 +4,7 @@
 
 Sim-Scouting is a web application for FRC Team 3464 to collect match and pit scouting observations for the 2026 REBUILT game. It is optimized for tablet/phone data entry at competitions, where connectivity can be unreliable.
 
-This document describes the system implemented in this repository as of July 17, 2026. It distinguishes current behavior from comments or intended behavior where they differ.
+This document describes the system implemented in this repository as of July 18, 2026. It distinguishes current behavior from comments or intended behavior where they differ.
 
 ## 2. System overview
 
@@ -18,20 +18,36 @@ Browser
        | HTTPS/JSON under /api
        v
 Express 5 API
-  Request routing, Firebase Admin access, password comparison
+  Request routing, Firebase session authentication, CSRF protection
        |
-       +--------------------+
-       v                    v
-Firebase Authentication   Cloud Firestore
-  user identities          scouting and password-hash documents
+       +-------------------------+
+       v                         v
+Firebase Authentication        Cloud Firestore
+  user identities and sessions  scouting and legacy password-hash documents
 ```
 
 The frontend and backend are separate Node projects:
 
 - The repository root contains the Express backend dependencies and start script.
 - `frontend/` contains the Vite/React single-page application and its own dependencies.
-- Firebase Admin is used only by the backend. The frontend declares the Firebase client dependency but does not configure or use a Firebase client application.
+- Firebase Admin is used only by the backend. The frontend does not contain or use the Firebase client SDK.
 - The frontend reads its API base URL from Vite's `VITE_API_BASE_URL`; development and production values are selected through mode-specific environment files.
+- The backend now provides a parallel Firebase session-cookie API. The current React application has not migrated to it yet and still uses the legacy authentication endpoints and JavaScript-readable identity cookies.
+
+### 2.1 Authentication implementation status
+
+The completed authentication work is traceable to the implementation chunks in [`docs/proposals/firebase-session-authentication.md`](docs/proposals/firebase-session-authentication.md):
+
+| Chunk | Completed result | Technical documentation coverage |
+|---|---|---|
+| 0 | Approved and committed the Firebase session-authentication design before changing runtime behavior | The proposal remains the authoritative design and decision record; this document describes implemented behavior rather than duplicating every proposal decision |
+| 1 | Extracted environment validation and single Firebase Admin initialization into `backend/config.js` and `backend/firebase.js`, with initial backend tests | Repository structure, backend initialization, configuration, and testing sections |
+| 2 | Added Firebase password REST authentication, session-cookie services, revocation checking, cookie configuration, expiration/warning calculation, and their tests | Backend-managed API, required environment, session response, security status, and testing sections |
+| 3 | Added the parallel `/api/auth` router, cookie parsing, registration, login, logout, session inspection, safe structured logs, and HTTP integration tests while retaining the legacy flow | Backend API contract, initialization, frontend migration status, security assessment, and testing sections |
+| 4 | Removed unused dependencies, migrated to modular Firebase Admin 14.2, updated compatible packages, recorded the frontend lint baseline, and documented the six unavoidable moderate transitive findings | Technology stack, testing/quality status, and source index |
+| 5 | Added signed, session-bound CSRF tokens, exact Origin and JSON checks, credentialed CORS, CSRF cookie rotation, safe rejection logs, configuration validation, and security tests | CORS, session API, CSRF model, required environment, operational checklist, and testing sections |
+
+Chunk 6 and later work is not described as current behavior. In particular, React still needs to migrate to the backend-managed session API.
 
 ## 3. Technology stack
 
@@ -43,10 +59,11 @@ The frontend and backend are separate Node projects:
 | Styling | Tailwind CSS 4 | Utility-class styling |
 | JSON display | `@microlink/react-json-view` | Local scouting record preview |
 | API | Node.js, Express 5 | JSON endpoints under `/api` |
-| Data/auth administration | Firebase Admin 12 | Firestore reads/writes and Authentication user management |
+| HTTP support | `cookie-parser`, Supertest | Request-cookie parsing and backend HTTP integration testing |
+| Data/auth administration | Firebase Admin 14 | Firestore reads/writes, Authentication user management, and session-cookie verification |
 | Hosting configuration | Vercel | SPA rewrite and CORS headers |
 
-The root project also declares `cors`, Firebase client SDK, and `nodemon`. The backend imports `cors` but does not use its middleware; CORS is implemented manually. The root Firebase client dependency is unused by the reviewed source.
+The root project also declares `cors` and `nodemon`. The backend imports `cors` but does not use its middleware; CORS is implemented manually.
 
 ## 4. Repository structure
 
@@ -54,7 +71,14 @@ The root project also declares `cors`, Firebase client SDK, and `nodemon`. The b
 sim-scouting/
 ├── .env.development.example     Backend development configuration template
 ├── .env.production.example      Backend production configuration template
-├── backend/server.js             Express API and Firebase Admin integration
+├── backend/
+│   ├── auth/                     Firebase REST sign-in and session helpers
+│   ├── middleware/csrf.js        Signed CSRF-token protection
+│   ├── routes/auth.js            Firebase session-authentication API
+│   ├── test/                     Backend unit and HTTP integration tests
+│   ├── config.js                 Environment loading and validation
+│   ├── firebase.js               Firebase Admin initialization
+│   └── server.js                 Express composition and legacy API routes
 ├── frontend/
 │   ├── .env.development.example Frontend development configuration template
 │   ├── .env.production.example  Frontend production configuration template
@@ -69,6 +93,8 @@ sim-scouting/
 │   ├── tsconfig*.json            Browser and build TypeScript settings
 │   └── vercel.json               SPA fallback rewrite
 ├── package.json                  Backend/runtime dependencies
+├── docs/proposals/               Planned authentication migration
+├── docs/technical-debt/          Recorded out-of-scope quality baselines
 ├── vercel.json                   API CORS response headers
 └── README.md                     Original project introduction
 ```
@@ -198,16 +224,16 @@ The checkbox component's in-place mutation can prevent React from recognizing a 
 
 1. selects an environment using `NODE_ENV`, defaulting to `development`;
 2. loads `.env.{environment}` using `dotenv`, with `.env` as an optional fallback;
-3. parses `SERVICE_ACCOUNT_KEY` as JSON;
-4. initializes Firebase Admin with the service-account credential;
-5. obtains a Firestore client;
-6. validates `PORT` and `CORS_ALLOWED_ORIGIN`;
-7. creates an Express application and `/api` router;
+3. validates all backend and session environment variables in `backend/config.js`;
+4. parses `SERVICE_ACCOUNT_KEY` as JSON;
+5. initializes the modular Firebase Admin 14 services once in `backend/firebase.js`;
+6. obtains Firebase Authentication and Firestore service instances;
+7. mounts the backend-managed session router at `/api/auth` and the legacy router at `/api`;
 8. starts an HTTP listener on the configured port.
 
-`SERVICE_ACCOUNT_KEY` must contain the complete Firebase service-account JSON encoded as one environment-variable value. `PORT` must be an integer from 1 through 65535, and `CORS_ALLOWED_ORIGIN` must be present. Missing or invalid configuration causes startup to fail before the server listens.
+`SERVICE_ACCOUNT_KEY` must contain the complete Firebase service-account JSON encoded as one environment-variable value. Startup also requires a valid port, exact HTTP(S) frontend origin, Firebase Web API key, session duration, warning duration, cookie settings, and CSRF signing secret. Missing or invalid configuration causes startup to fail before the server listens.
 
-The server accepts JSON bodies using Express defaults (approximately 100 KB maximum). Credential-bearing request bodies, password hashes, authentication responses, and Firestore write bodies are not logged. Operational errors remain logged, but there is no centralized error middleware, request ID, structured logging, health endpoint, rate limiter, or graceful shutdown handler.
+The server accepts JSON bodies using Express defaults (approximately 100 KB maximum). Credential-bearing request bodies, password hashes, Firebase tokens, session cookies, CSRF values, and Firestore write bodies are not logged. The new authentication routes emit structured events containing only safe categories and operational fields. The legacy routes still log some raw operational error messages, and there is no centralized error middleware, request ID, health endpoint, application-level rate limiter, or graceful shutdown handler.
 
 ### 6.2 CORS
 
@@ -215,9 +241,12 @@ The application manually emits:
 
 - `Access-Control-Allow-Origin: {CORS_ALLOWED_ORIGIN}`
 - allowed methods `GET,POST,PUT,DELETE,OPTIONS`
-- allowed headers `Content-Type, Authorization`
+- allowed headers `Content-Type, Authorization, X-CSRF-Token`
+- `Access-Control-Allow-Credentials: true`
 
-`CORS_ALLOWED_ORIGIN` must contain the exact browser origin, including scheme, host, and non-default port, without a path or trailing slash. Development uses `http://localhost:5173`; production uses the deployed frontend origin. OPTIONS requests return 200 immediately. The repository-level Vercel configuration separately defines CORS headers for `/api/(.*)`, including credentials and a broader header/method list. These two policies should be consolidated to avoid platform/runtime discrepancies. The imported `cors` package is currently unused.
+`CORS_ALLOWED_ORIGIN` must contain the exact browser origin, including scheme, host, and optional non-default port, without a path, query string, or trailing slash. Development uses `http://localhost:5173`; production uses the deployed frontend origin. OPTIONS requests return 200 immediately. Credentialed CORS is needed locally because Vite and Express run on different origins and the browser must include authentication and CSRF cookies. The selected production design routes the web application and `/api` through one browser origin.
+
+The repository-level Vercel configuration separately defines headers for `/api/(.*)`. The platform and Express policies must remain aligned so a deployment does not emit conflicting values. The imported `cors` package is currently unused.
 
 ### 6.3 API contract
 
@@ -308,6 +337,88 @@ The endpoint:
 6. returns the custom token and user details on equality.
 
 The custom token is unused by the client. The flow duplicates Firebase Authentication password handling using a fast, unsalted hash and stores password-equivalent material in a broadly writable/readable collection. If the hash document is missing, `hashedData.hashed` throws and produces a 500 response.
+
+The preceding `/register` and `/login` endpoints are legacy behavior retained temporarily for the current React application. They are separate from the backend-managed routes below.
+
+### 6.4 Backend-managed session authentication API
+
+The new API is mounted under `/api/auth`. React migration to these routes is planned for the next implementation chunk.
+
+#### `GET /auth/csrf`
+
+Issues the CSRF values required before calling a state-changing authentication route:
+
+```json
+{ "csrfToken": "<HMAC signature>.<random nonce>" }
+```
+
+The response uses `Cache-Control: no-store` and sets:
+
+- `csrf_binding`: random, `HttpOnly` pre-authentication browser binding when no Firebase session exists;
+- `csrf_token`: readable signed token that React will copy into `X-CSRF-Token`.
+
+If a Firebase session cookie exists, the token is bound to that cookie instead and the pre-authentication binding is cleared. A supplied `Origin` must match `CORS_ALLOWED_ORIGIN`; same-origin GET requests may omit it.
+
+#### `POST /auth/register`
+
+Requires the exact configured `Origin`, `Content-Type: application/json`, matching CSRF header/cookie values, and a valid HMAC signature.
+
+Request:
+
+```json
+{
+  "name": "Scout Name",
+  "email": "scout@example.com",
+  "password": "plaintext transport value"
+}
+```
+
+The backend preserves the existing input normalization: name and email are trimmed, while the password is not modified. It creates the Firebase Authentication user, signs in through Firebase's supported password REST API, exchanges the returned ID token for an `HttpOnly` Firebase session cookie, immediately verifies that cookie with revocation checking, and returns the verified public session representation. The ID token and session-cookie value are never returned in JSON.
+
+If user creation succeeds but automatic sign-in or session creation fails, the account is deliberately preserved and the response instructs the user to log in. Successful registration clears pre-authentication CSRF cookies because the new Firebase session becomes the signing binding.
+
+#### `POST /auth/login`
+
+Uses the same Origin, JSON, and CSRF controls as registration. Firebase's password REST API validates the supplied credentials; Node exchanges the resulting ID token for a verified session cookie.
+
+Successful registration and login return:
+
+```json
+{
+  "user": {
+    "uid": "firebase-uid",
+    "email": "scout@example.com",
+    "name": "Scout Name",
+    "debug": false
+  },
+  "sessionExpiresAt": "2026-07-18T02:00:00.000Z",
+  "sessionExpirationWarningAt": "2026-07-18T01:30:00.000Z"
+}
+```
+
+The `debug` value is derived only from a verified Firebase custom claim and defaults to `false`. It is display information, not a substitute for server-side authorization.
+
+#### `GET /auth/session`
+
+Reads the `HttpOnly` `session` cookie and verifies it through Firebase Admin with revocation checking enabled. A valid cookie returns the same public session representation shown above. Missing, expired, revoked, invalid, or disabled-user sessions return `401` without exposing Firebase error details.
+
+#### `POST /auth/logout`
+
+Requires the exact configured Origin and a valid signed CSRF token but no request body or content type. It idempotently clears the Firebase session, CSRF binding, and CSRF token cookies and returns `204 No Content`.
+
+### 6.5 CSRF security model
+
+Cookie authentication needs CSRF protection because browsers attach cookies automatically. The middleware in `backend/middleware/csrf.js` implements a signed double-submit design:
+
+1. a 32-byte `CSRF_SECRET` signs a random token nonce with HMAC-SHA-256;
+2. the signature is bound to either the private Firebase session cookie or a private pre-authentication binding cookie;
+3. state-changing routes require the exact configured Origin;
+4. the readable token cookie must exactly match `X-CSRF-Token` using a timing-safe comparison;
+5. Node independently recalculates and verifies the HMAC for the current private binding.
+
+A copied or injected token cannot validate without the matching private cookie and server secret. Authentication changes rotate the binding: successful registration/login clear the pre-authentication token, and React must obtain a new session-bound token before another mutation. Rejections use generic public messages and safe log categories without recording origins, request bodies, credentials, cookies, or token values.
+
+CSRF protection currently applies only to the new `/api/auth/register`, `/api/auth/login`, and `/api/auth/logout` routes. Applying it to the legacy generic `/write` endpoint is intentionally out of scope until data routes migrate to authenticated, purpose-specific APIs.
 
 ## 7. Data model
 
@@ -414,9 +525,23 @@ Backend:
 SERVICE_ACCOUNT_KEY={"type":"service_account",...}
 CORS_ALLOWED_ORIGIN=http://localhost:5173
 PORT=3000
+FIREBASE_WEB_API_KEY=your-development-firebase-web-api-key
+SESSION_DURATION_MINUTES=360
+SESSION_EXPIRATION_WARNING_MINUTES=30
+SESSION_COOKIE_SECURE=false
+SESSION_COOKIE_SAME_SITE=lax
+CSRF_SECRET=64-hexadecimal-characters
 ```
 
-Do not commit this credential. It grants administrative access to the Firebase project and should be stored in the hosting platform's secret manager/environment configuration.
+`SERVICE_ACCOUNT_KEY` grants administrative access to the Firebase project and must never be committed. `FIREBASE_WEB_API_KEY` identifies the Firebase project for password sign-in; unlike the service account, it is not an administrative credential, but it still belongs in backend configuration for this architecture. `CSRF_SECRET` is a private HMAC key and must also be stored only in protected backend or hosting-platform configuration.
+
+Generate separate development and production CSRF secrets with:
+
+```bash
+openssl rand -hex 32
+```
+
+The backend validates `CORS_ALLOWED_ORIGIN` as one exact HTTP(S) origin and requires the warning duration to be shorter than the session duration. Production startup also requires `SESSION_COOKIE_SECURE=true`. `SESSION_COOKIE_SAME_SITE` accepts only `lax`, `strict`, or `none`.
 
 Frontend:
 
@@ -440,7 +565,7 @@ npm install
 npm --prefix frontend install
 ```
 
-Copy the sanitized templates and supply the real Firebase service account:
+Copy the sanitized templates and supply the real Firebase service account, Firebase Web API key, and generated CSRF secret:
 
 ```bash
 cp .env.development.example .env.development
@@ -459,18 +584,24 @@ This sets `NODE_ENV=development`, runs `nodemon ./backend/server.js`, loads `.en
 npm --prefix frontend run dev
 ```
 
-The default development configuration uses frontend origin `http://localhost:5173`, backend port `3000`, and API base `http://localhost:3000/api`.
+The default development configuration uses frontend origin `http://localhost:5173`, backend port `3000`, API base `http://localhost:3000/api`, a six-hour session, and a warning 30 minutes before expiration. Local HTTP requires `SESSION_COOKIE_SECURE=false`; production must use secure cookies over HTTPS.
 
 ### 8.3 Production notes
 
 The frontend is a conventional Vite static deployment. The backend file directly calls `app.listen()` and does not export an application or serverless handler. Whether it deploys successfully depends on the host's Node process support or framework detection; the current root `vercel.json` does not define a function/build mapping. This should be verified in the deployed project configuration and made explicit in source.
 
-Production configuration uses `.env.production` locally or hosting-platform environment variables. `npm start` sets `NODE_ENV=production` and runs Node directly; `npm --prefix frontend run build` causes Vite to select `frontend/.env.production`. The intended production hostnames in the example configuration differ:
+Production configuration uses `.env.production` locally or hosting-platform environment variables. `npm start` sets `NODE_ENV=production` and runs Node directly; `npm --prefix frontend run build` causes Vite to select `frontend/.env.production`.
 
-- frontend/API calls: `scout4364i.vercel.app`
-- allowed frontend origin: `3464scouting.vercel.app`
+The selected production design exposes both surfaces through one browser origin:
 
-That is consistent with separate API and UI deployments. Both values are configuration rather than source constants and must also be configured in the deployment environment.
+```text
+Web application: https://sim-city-scouting.vercel.app
+API base:        https://sim-city-scouting.vercel.app/api
+```
+
+The frontend production API base should therefore become `/api`. Vercel must route `/api/*` to the Node API and all other application paths to the React SPA. The exact serverless routing still needs to be implemented and tested in a later proposal chunk.
+
+The current production example files have not yet been migrated to that decision: `.env.production.example` still allows `https://3464scouting.vercel.app`, while `frontend/.env.production.example` still calls `https://scout4364i.vercel.app/api`. Those values describe the older separate-host deployment and must not be copied into the final same-origin deployment unchanged. Updating and validating them belongs with the Vercel routing work.
 
 ## 9. Security assessment
 
@@ -489,19 +620,18 @@ The most important current risk is that Firebase Admin operations are exposed wi
 3. API input has no schema, size, path, or ownership validation beyond basic truthiness.
 4. Debug UID data and privileged UI capability are exposed publicly and enforced only in the client.
 
-### Recommended target authentication design
+### Authentication migration status
 
-Use Firebase Authentication end to end:
+The replacement design keeps all Firebase interaction behind Node rather than adding the Firebase client SDK to React. The completed backend foundation now:
 
-1. Sign up and sign in with the Firebase client SDK over Firebase's supported APIs.
-2. Obtain a Firebase ID token in the browser.
-3. Send `Authorization: Bearer <ID token>` to the Express API.
-4. Verify it with `admin.auth().verifyIdToken()` in middleware.
-5. Derive `uid`/display identity server-side and authorize explicit operations.
-6. Remove the `auth/{name}` collection and all custom SHA-256 handling.
-7. Replace generic path-based endpoints with purpose-specific, schema-validated routes.
+1. validates passwords through Firebase's supported REST API;
+2. exchanges Firebase ID tokens for `HttpOnly` session cookies;
+3. verifies sessions and revocation through Firebase Admin;
+4. derives identity and the `debug` claim from verified Firebase data;
+5. protects authentication mutations with signed, session-bound CSRF tokens;
+6. avoids returning Firebase tokens or session-cookie values to React.
 
-Privileged roles should use Firebase custom claims or a protected roles collection evaluated by the server.
+The security migration is not complete. React still needs to adopt `/api/auth/*`; the legacy authentication routes and `auth/{name}` password-hash documents then need to be removed. Generic `/read` and `/write` remain temporarily in scope for later authenticated data-route work. Privileged operations must enforce verified custom claims on the server; hiding frontend controls is not authorization.
 
 ## 10. Reliability and data-integrity assessment
 
@@ -528,7 +658,15 @@ Each observation should include `createdAt: FieldValue.serverTimestamp()`, authe
 
 ## 11. Testing and quality status
 
-No automated unit, component, API integration, end-to-end, or security tests are present in the repository. The frontend defines development, build, lint, and preview scripts. The backend defines `npm run dev` using nodemon and `npm start` using Node in production mode.
+The backend uses Node's built-in test runner and Supertest. Run all backend tests with:
+
+```bash
+npm run test:backend
+```
+
+The current suite contains 106 passing tests covering configuration validation, Firebase initialization, Firebase password REST handling, session creation and verification, authentication HTTP behavior, safe error mapping, signed CSRF token construction, origin/content-type rejection, cookie attributes, token rotation, and logout cleanup. Firebase services are replaced with test doubles, so the suite does not require a live Firebase project. Supertest HTTP integration tests bind a temporary localhost port.
+
+The frontend defines development, build, lint, and preview scripts but does not yet have automated component or end-to-end tests.
 
 Recommended minimum coverage:
 
@@ -540,19 +678,21 @@ Recommended minimum coverage:
 - end-to-end login and scouting workflows;
 - deployment smoke tests for `/`, direct SPA routes, API health, and CORS.
 
-After dependencies were installed, the production frontend build completed successfully. ESLint still reports existing source-quality errors and warnings unrelated to the environment configuration. Verify the current state with:
+The production frontend build completes successfully. ESLint has a separately documented baseline of 40 errors and 3 warnings that predates the authentication work. Verify the current state with:
 
 ```bash
 npm --prefix frontend run build
 npm --prefix frontend run lint
 ```
 
+The frontend dependency audit currently reports zero vulnerabilities. The root audit has six documented moderate findings in `uuid@9.0.1` reached transitively through Firebase Admin's Google Cloud Storage dependency. npm offers only a forced downgrade to Firebase Admin 10.3.0, so no unsupported forced fix is applied. There are no unresolved critical or high-severity audit findings.
+
 ## 12. Recommended improvement roadmap
 
 ### Phase 1: secure the boundary
 
-- Replace custom password verification with Firebase Authentication and backend-verified sessions.
-- Remove password hashes from Firestore.
+- Migrate React to the implemented Firebase session API and signed CSRF flow.
+- Remove the legacy password-verification routes and password hashes from Firestore after the frontend migration.
 - Disable generic `/read` and `/write` endpoints; introduce scoped endpoints and runtime schemas.
 - Enforce roles server-side and add rate limiting.
 - Rotate credentials if the database has ever been publicly accessible through these endpoints.
@@ -585,8 +725,10 @@ Before a competition deployment:
 
 - confirm the frontend API URL and backend allowed origin;
 - verify `SERVICE_ACCOUNT_KEY` is present only in protected backend configuration;
+- verify development and production use different private `CSRF_SECRET` values;
+- verify production uses `SESSION_COOKIE_SECURE=true` and a relative `/api` frontend base;
 - verify direct navigation to every SPA route;
-- test login, match scouting, pit scouting, offline save, and retry on representative mobile devices;
+- test CSRF initialization, registration, login, session restoration, logout, match scouting, pit scouting, offline save, and retry on representative mobile devices;
 - confirm Firestore paths and data are isolated to the intended event;
 - test duplicate team/match submissions and decide the desired conflict behavior;
 - verify debug/seeding capability is unavailable to ordinary users;
@@ -597,7 +739,14 @@ Before a competition deployment:
 
 | Source | Primary responsibility |
 |---|---|
-| `backend/server.js` | API, Firebase Admin initialization, Firestore access, account operations |
+| `backend/config.js` | Environment loading, normalization, and startup validation |
+| `backend/firebase.js` | Modular Firebase Admin initialization |
+| `backend/auth/firebase-auth-rest.js` | Firebase password authentication over the REST API |
+| `backend/auth/session.js` | Firebase session creation, verification, timing, and cookie options |
+| `backend/middleware/csrf.js` | Signed, binding-aware CSRF token issuance and validation |
+| `backend/routes/auth.js` | Backend-managed registration, login, session, logout, and CSRF endpoints |
+| `backend/server.js` | Express composition, CORS, Firestore access, and legacy API routes |
+| `backend/test/*` | Backend unit and HTTP integration tests |
 | `frontend/src/App.tsx` | Route composition |
 | `frontend/src/pages/Home.tsx` | Authentication redirect, navigation, debug flag |
 | `frontend/src/pages/MatchForm.tsx` | Match state, game rules, serialization, local/API submit |

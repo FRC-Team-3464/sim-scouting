@@ -13,6 +13,7 @@ const validEnvironment = {
     SESSION_EXPIRATION_WARNING_MINUTES: "30",
     SESSION_COOKIE_SECURE: "false",
     SESSION_COOKIE_SAME_SITE: "lax",
+    CSRF_SECRET: "a".repeat(64),
 };
 
 test("validateConfiguration returns converted backend settings", () => {
@@ -28,6 +29,7 @@ test("validateConfiguration returns converted backend settings", () => {
         sessionExpirationWarningMinutes: 30,
         sessionCookieSecure: false,
         sessionCookieSameSite: "lax",
+        csrfSecret: "a".repeat(64),
     });
 });
 
@@ -64,6 +66,32 @@ test("validateConfiguration rejects a missing CORS allowed origin", () => {
             }),
         { message: "CORS_ALLOWED_ORIGIN must be configured" },
     );
+});
+
+test("validateConfiguration rejects malformed CORS allowed origins", async (t) => {
+    const invalidOrigins = [
+        "example.com",
+        "ftp://example.com",
+        "https://example.com/",
+        "https://example.com/path",
+        "https://example.com?query=value",
+    ];
+
+    for (const corsAllowedOrigin of invalidOrigins) {
+        await t.test(`rejects ${corsAllowedOrigin}`, () => {
+            assert.throws(
+                () =>
+                    validateConfiguration({
+                        ...validEnvironment,
+                        CORS_ALLOWED_ORIGIN: corsAllowedOrigin,
+                    }),
+                {
+                    message:
+                        "CORS_ALLOWED_ORIGIN must include only an http(s) scheme, host, and optional port",
+                },
+            );
+        });
+    }
 });
 
 test("validateConfiguration rejects a missing Firebase Web API key", () => {
@@ -185,4 +213,43 @@ test("validateConfiguration requires secure cookies in production", () => {
                 "SESSION_COOKIE_SECURE must be true when NODE_ENV is production",
         },
     );
+});
+
+test("validateConfiguration normalizes a valid CSRF secret", () => {
+    const configuration = validateConfiguration({
+        ...validEnvironment,
+        CSRF_SECRET: "ABCDEF0123456789".repeat(4),
+    });
+
+    assert.equal(
+        configuration.csrfSecret,
+        "abcdef0123456789".repeat(4),
+    );
+});
+
+test("validateConfiguration rejects missing and malformed CSRF secrets", async (t) => {
+    const invalidSecrets = [
+        undefined,
+        "",
+        "too-short",
+        "g".repeat(64),
+        "a".repeat(63),
+        "a".repeat(65),
+    ];
+
+    for (const csrfSecret of invalidSecrets) {
+        await t.test(`rejects CSRF_SECRET=${String(csrfSecret)}`, () => {
+            assert.throws(
+                () =>
+                    validateConfiguration({
+                        ...validEnvironment,
+                        CSRF_SECRET: csrfSecret,
+                    }),
+                {
+                    message:
+                        "CSRF_SECRET must be configured as exactly 64 hexadecimal characters",
+                },
+            );
+        });
+    }
 });

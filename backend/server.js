@@ -28,8 +28,12 @@ app.use((req, res, next) => {
     );
     res.setHeader(
         "Access-Control-Allow-Headers",
-        "Content-Type, Authorization",
+        "Content-Type, Authorization, X-CSRF-Token",
     );
+    // Credentialed CORS is required during local development because Vite and
+    // Express use different origins and the browser must include auth/CSRF
+    // cookies. Production later uses the same-origin Vercel routing design.
+    res.setHeader("Access-Control-Allow-Credentials", "true");
 
     // Handle the preflight request
     if (req.method === "OPTIONS") {

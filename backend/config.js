@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 
 const VALID_SAME_SITE_VALUES = new Set(["lax", "strict", "none"]);
+const CSRF_SECRET_PATTERN = /^[a-f\d]{64}$/i;
 
 /**
  * Reads a required positive integer from an environment variable.
@@ -66,6 +67,66 @@ function parseSameSite(value) {
 }
 
 /**
+ * Validates the HMAC key used to sign CSRF tokens.
+ *
+ * Requiring exactly 32 bytes encoded as hexadecimal makes the key format
+ * unambiguous and prevents a short or placeholder value from reaching the
+ * security boundary. Operators can generate a suitable value with
+ * `openssl rand -hex 32`.
+ *
+ * @param {string | undefined} value Raw environment-variable value.
+ * @returns {string} Normalized lowercase 64-character hexadecimal key.
+ * @throws {Error} When the key is missing or is not exactly 32 bytes.
+ */
+function parseCsrfSecret(value) {
+    const normalizedValue = value?.trim();
+
+    if (!normalizedValue || !CSRF_SECRET_PATTERN.test(normalizedValue)) {
+        throw new Error(
+            "CSRF_SECRET must be configured as exactly 64 hexadecimal characters",
+        );
+    }
+
+    return normalizedValue.toLowerCase();
+}
+
+/**
+ * Validates the single browser origin trusted by CORS and CSRF checks.
+ *
+ * Comparing a canonical URL origin avoids accidental paths, query strings,
+ * trailing slashes, or non-HTTP schemes that would make exact request-Origin
+ * validation unreliable.
+ *
+ * @param {string | undefined} value Raw environment-variable value.
+ * @returns {string} Canonical HTTP(S) origin.
+ * @throws {Error} When the value is missing or contains more than an origin.
+ */
+function parseCorsAllowedOrigin(value) {
+    const normalizedValue = value?.trim();
+
+    if (!normalizedValue) {
+        throw new Error("CORS_ALLOWED_ORIGIN must be configured");
+    }
+
+    try {
+        const parsedUrl = new URL(normalizedValue);
+
+        if (
+            !["http:", "https:"].includes(parsedUrl.protocol) ||
+            parsedUrl.origin !== normalizedValue
+        ) {
+            throw new Error("invalid origin");
+        }
+    } catch {
+        throw new Error(
+            "CORS_ALLOWED_ORIGIN must include only an http(s) scheme, host, and optional port",
+        );
+    }
+
+    return normalizedValue;
+}
+
+/**
  * Validates backend environment variables and converts them into values the
  * application can use safely.
  *
@@ -82,14 +143,17 @@ function parseSameSite(value) {
  *   sessionDurationMinutes: number,
  *   sessionExpirationWarningMinutes: number,
  *   sessionCookieSecure: boolean,
- *   sessionCookieSameSite: "lax" | "strict" | "none"
+ *   sessionCookieSameSite: "lax" | "strict" | "none",
+ *   csrfSecret: string
  * }} Validated backend configuration.
  * @throws {Error} When required backend or session configuration is invalid.
  */
 export function validateConfiguration(environmentVariables) {
     const environment = environmentVariables.NODE_ENV || "development";
     const port = Number(environmentVariables.PORT);
-    const corsAllowedOrigin = environmentVariables.CORS_ALLOWED_ORIGIN;
+    const corsAllowedOrigin = parseCorsAllowedOrigin(
+        environmentVariables.CORS_ALLOWED_ORIGIN,
+    );
     const firebaseWebApiKey = environmentVariables.FIREBASE_WEB_API_KEY?.trim();
     const sessionDurationMinutes = parsePositiveInteger(
         environmentVariables.SESSION_DURATION_MINUTES,
@@ -106,15 +170,12 @@ export function validateConfiguration(environmentVariables) {
     const sessionCookieSameSite = parseSameSite(
         environmentVariables.SESSION_COOKIE_SAME_SITE,
     );
+    const csrfSecret = parseCsrfSecret(environmentVariables.CSRF_SECRET);
 
     if (!Number.isInteger(port) || port < 1 || port > 65535) {
         throw new Error(
             "PORT must be configured as an integer between 1 and 65535",
         );
-    }
-
-    if (!corsAllowedOrigin) {
-        throw new Error("CORS_ALLOWED_ORIGIN must be configured");
     }
 
     if (!firebaseWebApiKey) {
@@ -145,6 +206,7 @@ export function validateConfiguration(environmentVariables) {
         sessionExpirationWarningMinutes,
         sessionCookieSecure,
         sessionCookieSameSite,
+        csrfSecret,
     };
 }
 

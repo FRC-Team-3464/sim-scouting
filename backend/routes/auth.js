@@ -4,8 +4,8 @@
  * These routes run alongside the legacy authentication endpoints until the
  * React migration is complete. They exchange passwords for Firebase ID tokens,
  * convert those tokens to HttpOnly session cookies, and never return Firebase
- * tokens to the browser. CSRF protection is added in Chunk 5 before React uses
- * these state-changing routes.
+ * tokens to the browser. Signed CSRF protection secures the state-changing
+ * routes before React begins using this authentication API.
  */
 
 import cookieParser from "cookie-parser";
@@ -24,6 +24,7 @@ import {
     createSessionCookieOptions,
     verifySessionCookie,
 } from "../auth/session.js";
+import { createCsrfProtection } from "../middleware/csrf.js";
 
 /**
  * Determines whether an API input is a non-empty string.
@@ -236,6 +237,8 @@ function getRegistrationErrorResponse(error) {
  * @param {{
  *   auth: import("firebase-admin/auth").Auth,
  *   configuration: {
+ *     corsAllowedOrigin: string,
+ *     csrfSecret: string,
  *     firebaseWebApiKey: string,
  *     sessionDurationMinutes: number,
  *     sessionExpirationWarningMinutes: number,
@@ -256,10 +259,18 @@ export function createAuthenticationRouter({
     const router = express.Router();
     const setCookieOptions = createSessionCookieOptions(configuration);
     const clearCookieOptions = createClearSessionCookieOptions(configuration);
+    const csrfProtection = createCsrfProtection({
+        configuration,
+        logger,
+    });
 
     router.use(cookieParser());
 
-    router.post("/register", async (req, res) => {
+    // This endpoint is intentionally available before login. It establishes a
+    // signed browser binding used to protect registration and authentication.
+    router.get("/csrf", csrfProtection.issueCsrfToken);
+
+    router.post("/register", csrfProtection.protectJsonRequest, async (req, res) => {
         const registration = validateRegistrationBody(req.body);
 
         if (!registration) {
@@ -316,6 +327,10 @@ export function createAuthenticationRouter({
                 session.sessionCookie,
                 setCookieOptions,
             );
+            // The pre-authentication token was signed against csrf_binding.
+            // Clear it now because future mutations must use the new Firebase
+            // session cookie as their private CSRF signing binding.
+            csrfProtection.clearCsrfCookies(res);
             logAuthenticationEvent(logger, "info", {
                 route: "POST /api/auth/register",
                 status: 201,
@@ -337,7 +352,7 @@ export function createAuthenticationRouter({
         }
     });
 
-    router.post("/login", async (req, res) => {
+    router.post("/login", csrfProtection.protectJsonRequest, async (req, res) => {
         const credentials = validateLoginBody(req.body);
 
         if (!credentials) {
@@ -368,6 +383,7 @@ export function createAuthenticationRouter({
                 session.sessionCookie,
                 setCookieOptions,
             );
+            csrfProtection.clearCsrfCookies(res);
             logAuthenticationEvent(logger, "info", {
                 route: "POST /api/auth/login",
                 status: 200,
@@ -405,10 +421,11 @@ export function createAuthenticationRouter({
         }
     });
 
-    router.post("/logout", (req, res) => {
+    router.post("/logout", csrfProtection.protectRequest, (req, res) => {
         // Clearing is intentionally idempotent: an anonymous browser receives
         // the same response and does not learn whether a session existed.
         res.clearCookie(SESSION_COOKIE_NAME, clearCookieOptions);
+        csrfProtection.clearCsrfCookies(res);
         return res.status(204).end();
     });
 

@@ -699,13 +699,36 @@ Minimum controls:
 - appropriate `SameSite` cookie policy;
 - require an unpredictable CSRF token in `X-CSRF-Token`.
 
-A double-submit design is suitable for this stateless Firebase session:
+A signed double-submit design is suitable for this stateless Firebase session.
+The token must not use a naive token-equals-cookie comparison because cookie
+injection can bypass that pattern. The backend uses a separate 32-byte
+`CSRF_SECRET`, stored as 64 hexadecimal characters, to create HMAC-SHA-256
+signatures:
 
-1. Node generates a cryptographically random CSRF token.
-2. Node returns it in a readable CSRF cookie and/or `/api/auth/csrf` response.
-3. React sends the token in `X-CSRF-Token` on mutations.
-4. Node compares the header with the CSRF cookie using a timing-safe comparison.
-5. The authentication session cookie remains `HttpOnly` and is never exposed to React.
+1. `GET /api/auth/csrf` creates or reuses a cryptographically random,
+   `HttpOnly` `csrf_binding` cookie when no Firebase session exists.
+2. Node creates a signed token bound to the Firebase session cookie when one
+   exists, or to `csrf_binding` before authentication.
+3. Node returns the token in a readable `csrf_token` cookie and a JSON
+   `csrfToken` property. Neither response is cached.
+4. React sends the token in `X-CSRF-Token` on mutations.
+5. Node requires the exact configured origin, compares the header with the
+   token cookie using a timing-safe comparison, and verifies the HMAC against
+   the current session or pre-authentication binding.
+6. Successful registration and login clear the pre-authentication CSRF cookies
+   because the new Firebase session changes the signing binding. React obtains
+   a new session-bound token before its next mutation.
+7. Logout clears the Firebase session and both CSRF cookies.
+
+Registration and login accept only JSON content types, including an optional
+charset parameter. Logout has no request body, so it does not require a content
+type, but it still requires exact origin and token validation. CSRF failures
+return a generic response and logs contain only route, status, and a safe
+category—never tokens, cookies, credentials, origins, or request bodies.
+
+The authentication session and CSRF binding cookies remain `HttpOnly` and are
+never exposed to React. The readable CSRF token is not an authentication token
+and grants no access without the matching cookies and valid request origin.
 
 CSRF controls do not replace input validation, authentication, or authorization.
 
@@ -950,11 +973,15 @@ The legacy authentication endpoints remain available only until the replacement 
 **Scope:**
 
 - Add `GET /api/auth/csrf`.
-- Add the double-submit token implementation under `backend/middleware/csrf.js`.
-- Validate the exact allowed origin, JSON content type, CSRF cookie, and `X-CSRF-Token` header where required.
+- Add the signed double-submit implementation under `backend/middleware/csrf.js` using Node's built-in cryptographic APIs.
+- Add and validate a separate 32-byte hexadecimal `CSRF_SECRET`.
+- Bind signed tokens to the Firebase session cookie or a pre-authentication `csrf_binding` cookie.
+- Validate the exact allowed origin, JSON content type for registration and login, CSRF cookies, and `X-CSRF-Token` header where required.
 - Apply CSRF protection to the new state-changing auth routes.
-- Add tests for missing, mismatched, malformed, and valid tokens and unexpected origins.
-- Explain in comments why cookie authentication requires CSRF protection and why timing-safe comparison is used.
+- Clear stale CSRF cookies after successful authentication and during logout.
+- Add safe structured rejection logs containing no tokens, cookies, credentials, origins, or request bodies.
+- Add tests for missing, mismatched, malformed, forged, session-bound, and valid tokens; unsupported content types; and unexpected origins.
+- Explain in comments why cookie authentication requires CSRF protection, HMAC signing, session binding, and timing-safe comparison.
 
 **Out of scope:** Applying the middleware to the legacy write endpoint; that occurs when data routes move to session authentication.
 
