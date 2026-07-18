@@ -1,11 +1,12 @@
 import React, {useEffect} from "react";
 import { useNavigate } from "react-router-dom";
 import { readCookie, deleteCookie } from "../scripts/user";
+import { API_BASE_URL } from "../scripts/config";
 
 // Debug mode
 const de = async (): Promise<boolean> => {
     const user = readCookie("uid");
-    const response = await fetch("https://scout4364i.vercel.app/api/debug", {
+    const response = await fetch(`${API_BASE_URL}/debug`, {
         method: "GET",
     });
     let rawWhiteList = await response.json();

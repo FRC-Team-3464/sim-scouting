@@ -3,7 +3,13 @@ import cors from "cors";
 import dotenv from "dotenv";
 import admin from "firebase-admin";
 
-dotenv.config();
+const environment = process.env.NODE_ENV || "development";
+
+// Load the selected environment first, then use .env as an optional fallback.
+// Existing shell/hosting environment variables always take precedence.
+dotenv.config({
+    path: [`.env.${environment}`, ".env"],
+});
 
 const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
 
@@ -15,13 +21,24 @@ const db = admin.firestore();
 
 const app = express();
 const router = express.Router();
-const PORT = 3000;
+const PORT = Number(process.env.PORT);
+const corsAllowedOrigin = process.env.CORS_ALLOWED_ORIGIN;
+
+if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
+    throw new Error(
+        "PORT must be configured as an integer between 1 and 65535",
+    );
+}
+
+if (!corsAllowedOrigin) {
+    throw new Error("CORS_ALLOWED_ORIGIN must be configured");
+}
 
 app.use(express.json());
 app.use((req, res, next) => {
     res.setHeader(
         "Access-Control-Allow-Origin",
-        "https://3464scouting.vercel.app",
+        corsAllowedOrigin,
     );
     res.setHeader(
         "Access-Control-Allow-Methods",
@@ -66,7 +83,6 @@ const read = async (req, res) => {
         if (!snapshot.exists) {
             return res.status(404).send("Document not found");
         }
-        console.log(snapshot.data());
         res.json(snapshot.data());
     } catch (error) {
         console.error(error);
@@ -81,7 +97,6 @@ router.get("/debug", async (req, res) => {
 });
 
 router.post("/write", async (req, res) => {
-    console.log(req.body);
     try {
         const { path, data } = req.body;
 
@@ -103,7 +118,6 @@ router.post("/write", async (req, res) => {
 router.post("/read", read);
 
 router.post("/login", async (req, res) => {
-    console.log(req.body);
     try {
         const { email, password } = req.body;
 
@@ -127,9 +141,7 @@ router.post("/login", async (req, res) => {
             hashedData = snapshot.data();
         }
         hashedData = hashedData.hashed.trim();
-        let hashpassword = await sha256(password.trim());
-        console.log(hashpassword);
-        console.log(hashedData)
+        const hashpassword = await sha256(password.trim());
         if (hashpassword == hashedData) {
             res.status(200).json({
                 message: "Login successful",
@@ -137,7 +149,6 @@ router.post("/login", async (req, res) => {
                 uid: userRecord.uid,
                 email: userRecord.email,
                 name: userRecord.displayName,
-                // hashedData // included if you need it
             });
         } else {
             res.status(401).json({
@@ -154,7 +165,6 @@ router.post("/login", async (req, res) => {
 });
 
 router.post("/register", async (req, res) => {
-    console.log(req.body);
     try {
         const { email, password, name } = req.body;
 
