@@ -289,7 +289,7 @@ The initial implementation clears the current browser session. A “sign out eve
 The six-hour session is absolute and is not silently extended by activity. Node calculates `sessionExpiresAt` from the verified session and calculates `sessionExpirationWarningAt` using the configured warning interval. React uses these timestamps to protect the scouting workflow:
 
 1. Show a non-blocking warning when `sessionExpirationWarningAt` is reached.
-2. Prompt for reauthentication before starting a new match after the warning threshold is reached.
+2. Prompt for reauthentication before starting a new Match or Pit scouting form after the warning threshold is reached.
 3. Perform reauthentication in a modal or inline flow so current React form state is not discarded.
 4. A successful login replaces the existing session cookie and closes the prompt.
 5. If an API submission receives `401`, save the scouting payload locally, request login, and retry only after authentication succeeds.
@@ -825,7 +825,7 @@ Firebase Authentication and Firestore emulators should be used where practical t
 - session-expiration warning appears 30 minutes before expiration;
 - changing the configured warning interval changes the warning timestamp returned by `/api/auth/session`;
 - reauthentication replaces the session without clearing an active form;
-- session expiration returns to login;
+- session expiration opens required in-place reauthentication without clearing an active form;
 - an expired submission remains in local storage and can be retried after login;
 - logout invalidates the local browser session;
 - offline scouting records remain available after authentication changes.
@@ -1007,6 +1007,18 @@ The legacy authentication endpoints remain available only until the replacement 
 - Preserve active scouting drafts during warning, expiration, login, and retry flows.
 - Add frontend tests and repeatable browser checks.
 
+**Recorded implementation decisions:**
+
+- Protect `/`, `/match`, `/stored`, and `/pitScouting`; keep only `/login` and `/signup` public.
+- Show a non-blocking warning banner at `sessionExpirationWarningAt` and offer immediate reauthentication.
+- At expiration, open a non-dismissible reauthentication modal over the current page so an active form remains mounted.
+- Require warning-time reauthentication before starting either a new Match or Pit scouting form, including direct URL navigation.
+- After a `401`, retry the original request at most twice and only after successful reauthentication.
+- Retry transient network and `5xx` failures at most twice only for safe GET requests. Do not automatically retry mutations for those failures until the API provides idempotency protection.
+- Keep scouting payloads in local storage regardless of authentication or retry outcome.
+- Use Vitest with React Testing Library for API, authentication-state, and React behavior tests. Keep non-React session and retry logic independently testable so it can survive a planned frontend rewrite.
+- Add framework-independent Playwright acceptance coverage during the protected-data and deployment work in Chunks 7 and 8, when the complete browser-to-backend security boundary is available.
+
 **Out of scope:** Removing the legacy backend routes and old Firestore authentication documents.
 
 **Exit criteria:**
@@ -1089,6 +1101,30 @@ The legacy authentication endpoints remain available only until the replacement 
 
 **Suggested commit:** `refactor(auth): remove legacy password-hash authentication`
 
+### Chunk 10: finalize technical and development documentation
+
+**Goal:** Leave future student maintainers with a complete, repeatable development-environment setup after the authentication proposal is fully implemented.
+
+**Scope:**
+
+- Reconcile `README.md` and `TECHNICAL_DOCUMENTATION.md` with the final implemented architecture and link a dedicated `docs/development-setup.md` guide.
+- Document supported Node.js/npm and tool versions plus separate backend/frontend dependency installation.
+- Document creation of a dedicated Firebase development project and Firestore development database, including the selected initial Firestore mode and required collections/documents.
+- Document enabling Email/Password authentication, registering a development Firebase Web App, locating its Web API key, and configuring `FIREBASE_WEB_API_KEY`.
+- Document creation and safe handling of the development Firebase Admin service account without committing its JSON.
+- Document generation of a private HMAC key with `openssl rand -hex 32` and configuration of `CSRF_SECRET`.
+- Explain every backend and frontend development environment variable, which values are secrets, and how development values differ from production.
+- Provide exact startup, test, build, lint, audit, CORS, CSRF, registration, login, session, logout, Firestore, and troubleshooting steps.
+- Include checks that development and production Firebase projects, accounts, cookies, and secrets remain separate.
+
+**Exit criteria:**
+
+- A new contributor can create the Firebase development resources and run the complete application using only repository documentation.
+- No real credential, API secret, session value, CSRF token, or service-account JSON appears in tracked documentation.
+- All commands and verification steps are tested against the final repository state.
+
+**Suggested commit:** `docs: add complete development environment setup`
+
 ## 19. Acceptance criteria
 
 The change is complete when:
@@ -1124,6 +1160,8 @@ The change is complete when:
 6. **Revocation checking:** Call `verifySessionCookie(sessionCookie, true)` on every protected request initially and measure the operational cost before optimizing.
 7. **Debug authorization:** Use a Firebase `debug` custom claim, assigned through a restricted backend script and enforced by Node.
 8. **Password reset:** Add password reset in a separately reviewed implementation chunk rather than expanding the parallel session API work.
+9. **Frontend retry policy:** Allow at most two automatic retries after the original request. Retry `401` only after successful reauthentication, retry transient network/`5xx` failures only for safe GET requests, and do not retry mutations for uncertain failures without idempotency protection.
+10. **Frontend testing:** Use Vitest and React Testing Library for Chunk 6 logic and React behavior. Add framework-independent Playwright acceptance coverage when Chunks 7–8 provide the complete protected and deployed workflow.
 
 ## 21. Open decisions
 

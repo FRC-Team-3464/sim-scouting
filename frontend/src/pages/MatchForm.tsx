@@ -1,4 +1,4 @@
-import React, { useEffect, useState, type JSX } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import BinaryChoice from "../components/BinaryChoice";
 import MultiCounterInput from "../components/MultiCounterInput";
@@ -6,22 +6,16 @@ import IntegerInput from "../components/IntegerInput";
 import Dropdown from "../components/Dropdown";
 import AutoResizeTextarea from "../components/AutoResizeTextArea";
 import CheckboxDropdown from "../components/CheckboxDropdown";
-import { writeToDb } from "../scripts/firebase";
-import { readCookie } from "../scripts/user";
-import { debug } from "./Home";
+import { writeToDb } from "../api/scouting";
+import { useAuthentication } from "../auth/use-authentication";
 
 const MatchForm: React.FC = () => {
     const navigate = useNavigate();
+    const { user } = useAuthentication();
+    const debug = user?.debug === true;
     const goBack = () => {
         navigate("/");
     };
-
-    useEffect(() => {
-        // useEffect to run after component mounts
-        if (readCookie("user") == undefined) {
-            navigate("/login");
-        }
-    }, []); // empty dependency array so only runs once
     const [section, setSection] = useState<
         "setup" | "auto" | "teleop" | "endgame" | "errors"
     >("setup");
@@ -178,7 +172,9 @@ const MatchForm: React.FC = () => {
 
         const data = {
             scoutingTeam: scoutingTeam,
-            name: readCookie("user"),
+            // Chunk 7 will derive this identity on the server. Until then, use
+            // only the name from Node's verified session response.
+            name: user?.name,
             eventName: eventName,
             teamNumber: teamNumber,
             matchNumber: matchNumber,

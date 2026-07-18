@@ -1,31 +1,20 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import IntegerInput from "../components/IntegerInput";
 import AutoResizeTextarea from "../components/AutoResizeTextArea";
-import { readCookie } from "../scripts/user";
-
-import { writeToDb } from "../scripts/firebase";
+import { writeToDb } from "../api/scouting";
 import Dropdown from "../components/Dropdown";
 import BinaryChoice from "../components/BinaryChoice";
-import { debug } from "./Home";
+import { useAuthentication } from "../auth/use-authentication";
 
 
 const PitScoutingForm: React.FC = () => {
     const navigate = useNavigate();
+    const { user } = useAuthentication();
+    const debug = user?.debug === true;
     const goBack = () => {
         navigate("/");
     };
-
-
-     useEffect(() => {
-            // useEffect to run after component mounts
-            if (readCookie("user") == undefined) {
-                navigate("/login");
-            }
-        }, []);
-
-
-
 
 const [sent, setSent] = useState<boolean>(true);
 
@@ -54,7 +43,8 @@ async function submitData() {
 
     const data = {
         
-        name: readCookie("user"),
+        // Preserve the existing field until Chunk 7 derives it on the server.
+        name: user?.name,
         teamNumber: teamnum,
         scoutingTeam: scoutingTeam,
         eventName: eventName,

@@ -13,7 +13,7 @@ The solution has three logical tiers:
 ```text
 Browser
   React 19 + TypeScript + React Router + Tailwind CSS
-  UI state, cookies, localStorage fallback
+  Verified session state, CSRF-aware API client, localStorage fallback
        |
        | HTTPS/JSON under /api
        v
@@ -32,7 +32,7 @@ The frontend and backend are separate Node projects:
 - `frontend/` contains the Vite/React single-page application and its own dependencies.
 - Firebase Admin is used only by the backend. The frontend does not contain or use the Firebase client SDK.
 - The frontend reads its API base URL from Vite's `VITE_API_BASE_URL`; development and production values are selected through mode-specific environment files.
-- The backend now provides a parallel Firebase session-cookie API. The current React application has not migrated to it yet and still uses the legacy authentication endpoints and JavaScript-readable identity cookies.
+- React uses the backend-managed Firebase session-cookie API and never reads the `HttpOnly` authentication cookie. The legacy backend authentication endpoints remain temporarily available for rollback but have no frontend callers.
 
 ### 2.1 Authentication implementation status
 
@@ -46,8 +46,9 @@ The completed authentication work is traceable to the implementation chunks in [
 | 3 | Added the parallel `/api/auth` router, cookie parsing, registration, login, logout, session inspection, safe structured logs, and HTTP integration tests while retaining the legacy flow | Backend API contract, initialization, frontend migration status, security assessment, and testing sections |
 | 4 | Removed unused dependencies, migrated to modular Firebase Admin 14.2, updated compatible packages, recorded the frontend lint baseline, and documented the six unavoidable moderate transitive findings | Technology stack, testing/quality status, and source index |
 | 5 | Added signed, session-bound CSRF tokens, exact Origin and JSON checks, credentialed CORS, CSRF cookie rotation, safe rejection logs, configuration validation, and security tests | CORS, session API, CSRF model, required environment, operational checklist, and testing sections |
+| 6 | Migrated React to a centralized credentialed API client, verified authentication context, protected routes, configurable expiration warning, in-place reauthentication, bounded retry policy, and frontend tests | Frontend session model, API behavior, routing, draft preservation, security status, testing, and source index |
 
-Chunk 6 and later work is not described as current behavior. In particular, React still needs to migrate to the backend-managed session API.
+Chunk 7 and later work is not described as current behavior. In particular, the legacy generic data and debug operations do not yet enforce the verified session on the server.
 
 ## 3. Technology stack
 
@@ -86,9 +87,12 @@ sim-scouting/
 │   │   ├── App.tsx               SPA route table and shared footer layout
 │   │   ├── main.tsx              React entry point
 │   │   ├── index.css             Tailwind import and global styles
+│   │   ├── api/                  Credentialed client and scouting API calls
+│   │   ├── auth/                 Session context, route guards, warning/modal
 │   │   ├── components/           Reusable form controls
 │   │   ├── pages/                Screens and scouting workflows
-│   │   └── scripts/              API, cookie, and seed helpers
+│   │   ├── scripts/              Configuration and seed helpers
+│   │   └── test/                 Shared frontend test setup
 │   ├── vite.config.ts            React and Tailwind Vite plugins
 │   ├── tsconfig*.json            Browser and build TypeScript settings
 │   └── vercel.json               SPA fallback rewrite
@@ -122,16 +126,15 @@ Route paths are case-insensitive by React Router's default matching behavior, wh
 
 ### 5.2 Session representation and route protection
 
-The client stores identity in JavaScript-readable cookies:
+`AuthenticationProvider` calls `GET /api/auth/session` during startup and stores only the verified public response in React state. The state contains the Firebase UID, email, display name, verified `debug` claim, expiration timestamp, and configurable warning timestamp. React never reads the `HttpOnly` Firebase session cookie and no longer creates readable `user` or `uid` cookies.
 
-- `user`: the Firebase display name, used for greetings, route gating, and submission attribution.
-- `uid`: the Firebase Authentication UID, used only for the debug whitelist check.
+`ProtectedRoute` blocks `/`, `/match`, `/stored`, and `/pitScouting` while the startup request is pending. It redirects only after a confirmed `401`; network and server failures display a retryable session-check error rather than misclassifying the user as anonymous. `/login` and `/signup` remain public. A requested protected path is retained through login.
 
-Cookies expire after seven days and use `path=/`. They do not set `Secure`, `HttpOnly`, or `SameSite`. `Home`, `MatchForm`, and `PitScoutingForm` consider a user signed in if the `user` cookie exists; they do not validate a Firebase session or token. The backend's login response includes a Firebase custom token, but the client does not consume it with `signInWithCustomToken` or send it on later requests.
+The top-level debug whitelist request has been removed. Home and the scouting forms use only the verified session's `debug` boolean for current UI visibility and validation behavior. Chunk 7 must still enforce that claim on backend debug/seeding operations; frontend visibility is not authorization.
 
-Consequently, the cookies are display/client-navigation state, not an authenticated security session. Any browser user can create or alter them, and the API independently accepts unauthenticated data operations.
+The six-hour session remains absolute. React schedules a non-blocking warning from `sessionExpirationWarningAt`. A warned user must reauthenticate before starting a new Match or Pit form, including through a direct URL. At expiration or after an authenticated request receives `401`, a non-dismissible modal replaces the session without unmounting the active page.
 
-`Home.tsx` performs a top-level asynchronous request before the application module finishes loading. It obtains `/api/debug`, splits the returned comma-separated UID list, and exports a global `debug` boolean. Because the fetch is unguarded, a network or API failure can reject module initialization and prevent the UI from loading.
+The centralized client keeps CSRF tokens only in memory, includes credentials on every API request, refreshes the token when authentication changes its cookie binding, and parses JSON/text errors consistently. A `401` request may be replayed at most twice and only after successful reauthentication. Transient network and `5xx` failures may retry at most twice only for safe GET requests; mutations are not retried because the server may have committed them before the response was lost.
 
 ### 5.3 Match scouting workflow
 
@@ -312,7 +315,7 @@ Request:
 }
 ```
 
-Creates a Firebase Authentication user and returns UID, email, and display name. Firebase stores its own password representation securely. After this response, the frontend independently computes unsalted SHA-256 of the password and calls `/write` to store it at `auth/{name}`.
+Creates a Firebase Authentication user and returns UID, email, and display name. Firebase stores its own password representation securely. The removed legacy frontend previously followed this response by computing unsalted SHA-256 of the password and calling `/write` to store it at `auth/{name}`; the current frontend has no caller for this endpoint.
 
 This is not atomic: the Authentication user can be created while the Firestore hash write fails. Display names are also unsuitable document identifiers because duplicate names collide and names containing `/` change the path shape.
 
@@ -336,9 +339,9 @@ The endpoint:
 5. hashes the supplied password with SHA-256 and compares strings;
 6. returns the custom token and user details on equality.
 
-The custom token is unused by the client. The flow duplicates Firebase Authentication password handling using a fast, unsalted hash and stores password-equivalent material in a broadly writable/readable collection. If the hash document is missing, `hashedData.hashed` throws and produces a 500 response.
+The current frontend does not call this endpoint or consume its custom token. The retained backend flow duplicates Firebase Authentication password handling using a fast, unsalted hash and stores password-equivalent material in a broadly writable/readable collection. If the hash document is missing, `hashedData.hashed` throws and produces a 500 response.
 
-The preceding `/register` and `/login` endpoints are legacy behavior retained temporarily for the current React application. They are separate from the backend-managed routes below.
+The preceding `/register` and `/login` endpoints are legacy behavior retained temporarily as a coordinated-deployment rollback point. They are separate from the backend-managed routes below and have no current React callers.
 
 ### 6.4 Backend-managed session authentication API
 
@@ -611,7 +614,7 @@ The most important current risk is that Firebase Admin operations are exposed wi
 
 1. **Arbitrary Firestore access:** any caller can submit a document path to `/read` or `/write`. Because the server uses Admin SDK credentials, Firestore security rules do not constrain these operations.
 2. **Password-hash disclosure and modification:** the same generic endpoints can access `auth/*`. Unsalted SHA-256 hashes are fast to crack and act as password verifiers.
-3. **Client-only identity:** the `user` and `uid` cookies are forgeable; neither submission attribution nor debug authorization is trustworthy.
+3. **Unprotected server identity:** React now uses verified session identity, but generic `/write` still trusts caller-supplied record fields and does not require a session. A direct caller can therefore spoof scouting attribution until Chunk 7 derives it on the server.
 
 ### High
 
@@ -631,7 +634,9 @@ The replacement design keeps all Firebase interaction behind Node rather than ad
 5. protects authentication mutations with signed, session-bound CSRF tokens;
 6. avoids returning Firebase tokens or session-cookie values to React.
 
-The security migration is not complete. React still needs to adopt `/api/auth/*`; the legacy authentication routes and `auth/{name}` password-hash documents then need to be removed. Generic `/read` and `/write` remain temporarily in scope for later authenticated data-route work. Privileged operations must enforce verified custom claims on the server; hiding frontend controls is not authorization.
+React now uses `/api/auth/*`, restores verified sessions during startup, and no longer hashes passwords, writes `auth/{name}`, handles Firebase custom tokens, or derives authentication from readable cookies. The legacy backend authentication routes and existing password-hash documents remain until the replacement is proven through the protected-data and deployment chunks.
+
+The security migration is not complete. Generic `/read` and `/write` still accept unauthenticated caller-selected paths and identity fields. The debug endpoint and seeding operations also lack server-side claim enforcement. Chunk 7 applies the verified session and CSRF boundary to those operations and derives scout identity on the server. Privileged operations must enforce verified custom claims on the server; hiding frontend controls is not authorization.
 
 ## 10. Reliability and data-integrity assessment
 
@@ -666,7 +671,7 @@ npm run test:backend
 
 The current suite contains 106 passing tests covering configuration validation, Firebase initialization, Firebase password REST handling, session creation and verification, authentication HTTP behavior, safe error mapping, signed CSRF token construction, origin/content-type rejection, cookie attributes, token rotation, and logout cleanup. Firebase services are replaced with test doubles, so the suite does not require a live Firebase project. Supertest HTTP integration tests bind a temporary localhost port.
 
-The frontend defines development, build, lint, and preview scripts but does not yet have automated component or end-to-end tests.
+The frontend uses Vitest, jsdom, and React Testing Library. Its 18 tests cover the centralized client, credential and CSRF behavior, retry limits, startup session restoration, protected routing, verified identity/debug state, login failures, registration validation and success, logout, warning/expiration behavior, direct form-route gating, and in-place reauthentication that preserves active React form state. Framework-independent Playwright acceptance tests are deferred to Chunks 7–8 when the complete protected browser-to-backend boundary exists.
 
 Recommended minimum coverage:
 
@@ -678,11 +683,12 @@ Recommended minimum coverage:
 - end-to-end login and scouting workflows;
 - deployment smoke tests for `/`, direct SPA routes, API health, and CORS.
 
-The production frontend build completes successfully. ESLint has a separately documented baseline of 40 errors and 3 warnings that predates the authentication work. Verify the current state with:
+The production frontend build completes successfully. Removing the obsolete authentication code reduced the separately documented lint debt from 40 errors and 3 warnings to 21 errors and no warnings. The remaining findings are pre-existing issues outside this authentication chunk. Verify the current state with:
 
 ```bash
 npm --prefix frontend run build
 npm --prefix frontend run lint
+npm --prefix frontend run test
 ```
 
 The frontend dependency audit currently reports zero vulnerabilities. The root audit has six documented moderate findings in `uuid@9.0.1` reached transitively through Firebase Admin's Google Cloud Storage dependency. npm offers only a forced downgrade to Firebase Admin 10.3.0, so no unsupported forced fix is applied. There are no unresolved critical or high-severity audit findings.
@@ -691,7 +697,7 @@ The frontend dependency audit currently reports zero vulnerabilities. The root a
 
 ### Phase 1: secure the boundary
 
-- Migrate React to the implemented Firebase session API and signed CSRF flow.
+- Apply the verified React session to backend data and debug operations.
 - Remove the legacy password-verification routes and password hashes from Firestore after the frontend migration.
 - Disable generic `/read` and `/write` endpoints; introduce scoped endpoints and runtime schemas.
 - Enforce roles server-side and add rate limiting.
@@ -754,7 +760,8 @@ Before a competition deployment:
 | `frontend/src/pages/LocalStored.tsx` | Local record inspection and retry |
 | `frontend/src/pages/Login.tsx` | Login UI |
 | `frontend/src/pages/Signup.tsx` | Registration UI and client validation |
-| `frontend/src/scripts/firebase.tsx` | API client, team-index update, custom password hash |
-| `frontend/src/scripts/user.tsx` | Cookie creation/read/delete |
+| `frontend/src/api/client.ts` | Credentialed HTTP requests, CSRF lifecycle, safe errors, and bounded retries |
+| `frontend/src/api/scouting.ts` | Existing team-index and generic Firestore request behavior through the central client |
+| `frontend/src/auth/*` | Verified session context, protected routes, warnings, and in-place reauthentication |
 | `frontend/src/scripts/seed.tsx` | Synthetic match-record generator |
 | `frontend/src/components/*` | Reusable scouting inputs and footer |

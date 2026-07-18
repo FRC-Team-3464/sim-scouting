@@ -5,7 +5,7 @@
 - **State:** Open technical debt
 - **Recorded:** July 18, 2026
 - **Scope:** Existing React/TypeScript source findings only
-- **Related work:** Firebase session authentication, implementation Chunk 4
+- **Related work:** Firebase session authentication, implementation Chunks 4 and 6
 
 This document records the frontend lint findings discovered while dependency vulnerabilities were remediated. Fixing these findings is intentionally separate from the authentication and dependency-security work so behavior changes can be reviewed and tested independently.
 
@@ -19,7 +19,33 @@ npm run lint
 
 The recorded environment uses Node.js 22, ESLint 9.39.1, and `typescript-eslint` 8.48.1. Line numbers are a snapshot and may move as source files change; the ESLint rule and affected code should be treated as the durable identifiers.
 
-## Summary
+## Chunk 6 update
+
+The session-authentication frontend migration removed obsolete cookie, password-hash, debug-whitelist, and legacy API code rather than cosmetically repairing it. This resolved 19 errors and all 3 warnings as a direct consequence of the approved behavior change. No new lint finding was introduced by the centralized API client, authentication provider, protected routes, expiration UI, or frontend tests.
+
+Current result:
+
+| Measurement | Count |
+|---|---:|
+| Files with findings | 5 |
+| Errors | 21 |
+| Warnings | 0 |
+| Total findings | 21 |
+| Automatically fixable errors reported by ESLint | 10 |
+
+Current findings by rule:
+
+| Severity | Rule | Count |
+|---|---|---:|
+| Error | `prefer-const` | 10 |
+| Error | `@typescript-eslint/no-unused-vars` | 8 |
+| Error | `@typescript-eslint/no-explicit-any` | 1 |
+| Error | `react-hooks/immutability` | 1 |
+| Error | `@typescript-eslint/no-unused-expressions` | 1 |
+
+The remaining findings are limited to `CheckboxDropdown.tsx`, `LocalStored.tsx`, `MatchForm.tsx`, `pitScoutingForm.tsx`, and `seed.tsx`. Their remediation remains separate technical debt.
+
+## Original Chunk 4 snapshot
 
 | Measurement | Count |
 |---|---:|
