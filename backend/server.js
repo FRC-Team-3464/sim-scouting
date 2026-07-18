@@ -1,38 +1,15 @@
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-import admin from "firebase-admin";
+import { loadConfiguration } from "./config.js";
+import { initializeFirebase } from "./firebase.js";
 
-const environment = process.env.NODE_ENV || "development";
-
-// Load the selected environment first, then use .env as an optional fallback.
-// Existing shell/hosting environment variables always take precedence.
-dotenv.config({
-    path: [`.env.${environment}`, ".env"],
-});
-
-const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
-
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-});
-
-const db = admin.firestore();
+const configuration = loadConfiguration();
+const { auth, db } = initializeFirebase(configuration.serviceAccountKey);
 
 const app = express();
 const router = express.Router();
-const PORT = Number(process.env.PORT);
-const corsAllowedOrigin = process.env.CORS_ALLOWED_ORIGIN;
-
-if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
-    throw new Error(
-        "PORT must be configured as an integer between 1 and 65535",
-    );
-}
-
-if (!corsAllowedOrigin) {
-    throw new Error("CORS_ALLOWED_ORIGIN must be configured");
-}
+const PORT = configuration.port;
+const corsAllowedOrigin = configuration.corsAllowedOrigin;
 
 app.use(express.json());
 app.use((req, res, next) => {
@@ -125,11 +102,9 @@ router.post("/login", async (req, res) => {
             return res.status(400).send("Email and password are required");
         }
 
-        const userRecord = await admin.auth().getUserByEmail(email);
+        const userRecord = await auth.getUserByEmail(email);
 
-        const customToken = await admin
-            .auth()
-            .createCustomToken(userRecord.uid);
+        const customToken = await auth.createCustomToken(userRecord.uid);
 
         const identifier = userRecord.displayName || userRecord.uid;
 
@@ -171,7 +146,7 @@ router.post("/register", async (req, res) => {
         if (!email || !password) {
             return res.status(400).send("Email and password are required");
         }
-        const userRecord = await admin.auth().createUser({
+        const userRecord = await auth.createUser({
             email,
             password,
             displayName: name,
