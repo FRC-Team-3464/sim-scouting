@@ -680,6 +680,13 @@ Web application: https://sim-city-scouting.vercel.app
 API base:        https://sim-city-scouting.vercel.app/api
 ```
 
+Hosted staging follows the same pattern under its separate stable origin:
+
+```text
+Web application: https://sim-city-scouting-staging.vercel.app
+API base:        https://sim-city-scouting-staging.vercel.app/api
+```
+
 Although these are two application surfaces, they are not two domains. The scheme, hostname, and port are identical; `/api` is only a path. This same-origin architecture is the selected design because it avoids third-party-cookie restrictions and simplifies session handling.
 
 The frontend production configuration should use a relative API base:
@@ -688,7 +695,27 @@ The frontend production configuration should use a relative API base:
 VITE_API_BASE_URL=/api
 ```
 
-Vercel must route `/api/*` to the Node API while routing other requests to the React application. The precise Vercel function/rewrite configuration will be defined and tested during implementation.
+The current combined repository will be connected to two root-level Vercel
+projects: `sim-city-scouting` deploys `main` to production, while
+`sim-city-scouting-staging` deploys the dedicated `staging` branch. Each project
+hosts both React and Node under its own same origin. `api/[...path].js` exports
+the Express application as one catch-all Vercel Function, while the shared root
+`vercel.json` builds `frontend/dist` and rewrites non-file application routes
+to React's `index.html`. Express construction lives in `backend/app.js`;
+`backend/server.js` starts the local long-running listener without being
+imported by Vercel.
+
+Hosted staging uses the existing development Firebase project, so local
+development and staging intentionally share Firebase Authentication users and
+Firestore data. Staging uses a separate service-account key within that Firebase
+project and a separate CSRF secret so its cloud credentials can be rotated
+without replacing developers' local credentials. Production uses a separate
+Firebase project and separate credentials.
+
+Separating the frontend and backend into two repositories is deferred to a
+future proposal. That migration should preserve this public same-origin
+contract by keeping `/api/*` behind the web origin rather than making browsers
+depend on cross-origin authentication cookies.
 
 Production session cookies use:
 
@@ -745,25 +772,24 @@ CSRF controls do not replace input validation, authentication, or authorization.
 
 ## 14. Rate limiting and abuse controls
 
-Vercel Hobby includes one WAF rate-limit rule per project with fixed-window counting. Hobby counting keys are limited to IP and JA4 digest, with windows from 10 seconds through 10 minutes. Use this rule for initial IP-based protection of state-changing authentication endpoints before traffic reaches Node.
+Firebase applies its own abuse controls, and Node safely maps Firebase
+rate-limited registration and login failures to `429 Too Many Requests`. The
+application does not maintain an independent request counter.
 
-Initial rule:
-
-```text
-Path:      /api/auth/*
-Method:    POST
-Key:       IP
-Algorithm: Fixed window
-Limit:     20 requests per minute per IP
-```
-
-The exact threshold should be monitored and adjusted during competition testing. Rate-limited requests return `429 Too Many Requests` before invoking the Node function.
+Vercel Hobby WAF enforcement is deferred rather than enabling the originally
+proposed `20` requests per minute per IP rule without traffic evidence. Scouts
+at a school or competition can share one public IP, so an untested IP threshold
+could reject legitimate authentication traffic. After the new Vercel project
+exists, inspect its Firewall configuration, observe normal login and
+registration volume in logging mode, and then decide whether to enforce a rule
+and what threshold is appropriate. Logout should not consume a future
+credential-attempt allowance.
 
 No external persistent rate-limit store or application-level rate-limit package will be added in this change. In-memory Node counters must not be used as a security boundary because Vercel can execute requests across multiple function instances.
 
-The Hobby WAF rule cannot maintain separate counters for normalized email addresses, Firebase UIDs, login versus registration, or other application identifiers. A serverless persistent store such as Upstash Redis may be reconsidered later if monitoring demonstrates a need for those controls.
+The Hobby WAF feature cannot maintain separate counters for normalized email addresses, Firebase UIDs, login versus registration, or other application identifiers. A serverless persistent store such as Upstash Redis may be reconsidered later if monitoring demonstrates a need for those controls.
 
-Node must still return generic credential failures, validate inputs, avoid account enumeration, and avoid logging credentials or tokens. WAF rate limiting supplements rather than replaces Firebase Authentication protections.
+Node must still return generic credential failures, validate inputs, avoid account enumeration, and avoid logging credentials or tokens. Any future WAF rate limiting would supplement rather than replace Firebase Authentication protections.
 
 Firebase App Check may be evaluated later, but it does not replace user authentication or server authorization.
 
@@ -1082,7 +1108,7 @@ The legacy authentication endpoints remain available only until the replacement 
 
 **Suggested commit:** `feat(security): protect scouting and debug operations`
 
-### Chunk 8: production routing and abuse protection
+### Chunk 8: production routing and deployment verification
 
 **Goal:** Validate the selected same-origin design on Vercel Hobby.
 
@@ -1092,16 +1118,22 @@ The legacy authentication endpoints remain available only until the replacement 
 - Set the production frontend API base to `/api`.
 - Reconcile Express CORS behavior with `vercel.json` so headers do not conflict.
 - Verify production cookie attributes and credentialed requests.
-- Configure the Vercel Hobby WAF rule for `POST /api/auth/*`, keyed by IP, at the initial limit of 20 requests per minute.
-- Run deployment smoke tests for registration, login, session restoration, protected writes, logout, and rate limiting.
+- Deploy the combined repository through two root-level Vercel projects: `main` to `sim-city-scouting` and `staging` to `sim-city-scouting-staging`. Both projects use the same tracked build and routing configuration.
+- Configure hosted staging with the existing development Firebase project but a separate staging service-account key and CSRF secret. Keep production on its separate Firebase project.
+- Validate authentication on staging before promoting the approved commit to production. A possible frontend/backend repository split is a future proposal and must preserve the same public `/api` contract.
+- Run production-domain smoke tests for registration, login, session restoration, protected writes, and logout.
+- Record WAF rate limiting as deferred until normal shared-IP traffic can be observed; do not introduce an arbitrary production threshold in this chunk.
 
-**Out of scope:** Upstash Redis or another application-level persistent rate-limit store.
+**Out of scope:** Upstash Redis or another application-level persistent rate-limit store, WAF enforcement without traffic evidence, authenticated mutation testing on generated Vercel preview domains, and splitting the repository.
 
 **Exit criteria:**
 
 - Web and API traffic operate under `https://sim-city-scouting.vercel.app`.
+- Staging web and API traffic operate under `https://sim-city-scouting-staging.vercel.app` from the `staging` branch.
 - Session cookies work without cross-site-cookie exceptions.
-- The WAF rule is active and expected authentication traffic is not blocked.
+- Staging and production cookies, service-account keys, and CSRF secrets remain isolated by project and hostname.
+- Production registration, login, session restoration, protected writes, and logout pass the manual smoke checklist.
+- The WAF decision is based on observed traffic rather than an assumed per-IP threshold.
 
 **Suggested commit:** `chore(deploy): configure same-origin session deployment`
 
@@ -1179,7 +1211,7 @@ The change is complete when:
 ## 20. Recorded decisions
 
 1. **Production origin:** Use one origin, `https://sim-city-scouting.vercel.app`, with the API under `/api`.
-2. **Rate limiting:** Use the single Vercel Hobby WAF rule for initial IP-based protection of `POST /api/auth/*`. Do not add an external persistent store in this change; reconsider one only if monitoring shows a need for per-email, per-user, or endpoint-specific limits.
+2. **Rate limiting:** Do not enable an arbitrary Vercel WAF threshold during this chunk. Firebase continues to apply its own controls and Node maps Firebase throttling to `429`. Observe normal login and registration traffic, especially when scouts share a public IP, before deciding whether to enable a WAF rule. Do not add an external persistent store in this change.
 3. **Generic data endpoints:** Retain `/read` and `/write` during this change, protect them with authentication, and defer their replacement.
 4. **User migration:** Recreate the new-season user base as needed; no rollback retention window is required for obsolete `auth/*` documents.
 5. **Session duration:** Configure session duration and warning intervals in minutes. Start with a six-hour (`360` minute) absolute Firebase session and a `30` minute warning, and support in-place reauthentication so active scouting data is preserved.
@@ -1188,6 +1220,9 @@ The change is complete when:
 8. **Password reset:** Add password reset in a separately reviewed implementation chunk rather than expanding the parallel session API work.
 9. **Frontend retry policy:** Allow at most two automatic retries after the original request. Retry `401` only after successful reauthentication, retry transient network/`5xx` failures only for safe GET requests, and do not retry mutations for uncertain failures without idempotency protection.
 10. **Frontend testing:** Use Vitest and React Testing Library for frontend logic and behavior, backend integration tests for the API security boundary, and a repeatable manual browser checklist. Reconsider browser automation after the planned React rewrite rather than adding Playwright during this proposal.
+11. **Deployment topology:** Connect the combined repository to two root-level Vercel projects. `sim-city-scouting` deploys `main` to `https://sim-city-scouting.vercel.app`; `sim-city-scouting-staging` deploys `staging` to `https://sim-city-scouting-staging.vercel.app`. Defer a possible frontend/backend repository split to a separate proposal while preserving the public same-origin `/api` contract in each environment.
+12. **Staging Firebase isolation:** Hosted staging reuses the existing development Firebase project and therefore shares its users and Firestore data with local development. It uses a separate service-account key in that project and a staging-only CSRF secret. Production uses a separate Firebase project and credentials.
+13. **Preview authentication:** Use the stable staging project for pre-production authentication testing. Generated Vercel preview origins are not trusted for authenticated mutations.
 
 ## 21. Open decisions
 

@@ -20,7 +20,9 @@ Built for the First Robotics Competition REBUILT 2026
 - Firebase Authentication email/password accounts
 
 ## Installation
- Clone the repository and install dependencies. Node must be first installed
+
+Clone the repository and install dependencies. This project requires Node.js
+22.x.
 
 ```
 git clone https://github.com/FRC-Team-3464/sim-scouting
@@ -29,15 +31,53 @@ npm install
 npm --prefix frontend install
 ```
 
-To build frontend:
+Start the backend and frontend in separate terminals:
+
+```bash
+npm run dev
+npm --prefix frontend run dev
+```
+
+To build the frontend:
+
 ```
 npm --prefix frontend run build
 ```
 
+The backend requires `.env.development`, and the frontend requires
+`frontend/.env.development`. Start with the corresponding tracked `.example`
+files. See `TECHNICAL_DOCUMENTATION.md` for the current variables and security
+model; a complete new-contributor environment guide is planned after the
+authentication proposal is finalized.
+
+## Hosted staging and production architecture
+
+The approved Vercel deployment uses one public origin:
+
+```text
+Web: https://sim-city-scouting.vercel.app
+API: https://sim-city-scouting.vercel.app/api/*
+```
+
+The same repository is connected to two root-level Vercel projects. The
+`sim-city-scouting` project deploys `main` to production, and
+`sim-city-scouting-staging` deploys the `staging` branch to
+`https://sim-city-scouting-staging.vercel.app`. Both projects use the root
+`vercel.json`, which installs both dependency trees, builds `frontend/dist`,
+and keeps React Router routes working. `api/[...path].js` exposes Express as one
+catch-all Vercel Function. React uses the relative API base `/api`, so cookies
+remain same-origin in both environments.
+
+Hosted staging shares the existing development Firebase project but uses a
+separate staging service-account key and CSRF secret. Production uses a
+separate Firebase project and credentials. Follow
+[`docs/deployment-setup.md`](docs/deployment-setup.md) to create both projects
+without placing secrets in tracked files.
+
 # Documentation
 ## Firebase
 Working with the best free database:
-- SERVER SIDE (backend/server.js)
+- SERVER SIDE (`backend/app.js`, started locally by `backend/server.js`)
 --
   - implementation of [node.js](https://nodejs.org/docs/latest/api/) and [express.js](https://expressjs.com/en/5x/api.html)
   - POST to "/write": writes authenticated scouting data with CSRF protection and server-derived scout identity
@@ -136,8 +176,10 @@ MultiCounterInput.tsx
 
 ### .env
 - File that has values that are kept hidden from the public.
-- Used to hold api keys and secret values.
-- Each variable name must be capitalized, underscores instead of spaces, and start with __VITE___
+- Backend environment files hold Firebase Admin credentials, API configuration,
+  session settings, and the CSRF secret.
+- Frontend environment files contain browser-visible values and may use the
+  `VITE_` prefix. Never place a secret in a `VITE_` variable.
 
 ### .gitignore
 - Makes git ignore files, and not show them on the repository.
