@@ -376,7 +376,7 @@ CORS_ALLOWED_ORIGIN=http://localhost:5173
 PORT=3000
 ```
 
-Production examples should use:
+Production configuration must use:
 
 ```dotenv
 SESSION_COOKIE_SECURE=true
@@ -386,6 +386,8 @@ SESSION_COOKIE_SAME_SITE=lax
 `FIREBASE_WEB_API_KEY` identifies the Firebase project for Authentication REST requests. It is not a service-account credential, but it remains backend configuration under this architecture.
 
 Startup validation must require session duration and warning values to be positive integers, require the warning interval to be shorter than the session duration, and reject invalid boolean and SameSite values with clear messages.
+
+When `NODE_ENV=production`, startup validation must also require `SESSION_COOKIE_SECURE=true`. This fail-fast rule prevents a production deployment from silently sending authentication cookies without HTTPS-only protection.
 
 `360` minutes is six hours, and `30` minutes is the selected warning interval for development and production. Configuration uses minutes for operator readability. The backend converts the duration to milliseconds only at the Firebase API boundary because `createSessionCookie()` expects milliseconds.
 
@@ -850,10 +852,12 @@ The legacy authentication endpoints remain available only until the replacement 
 - Add and validate `FIREBASE_WEB_API_KEY`.
 - Add and validate `SESSION_DURATION_MINUTES`, initially `360`.
 - Add and validate `SESSION_EXPIRATION_WARNING_MINUTES`, initially `30` and less than the session duration.
-- Add `backend/auth/firebase-auth-rest.js` for Firebase Authentication REST calls and safe error mapping.
-- Add `backend/auth/session.js` for session creation, verification with revocation checking, timing calculation, and cookie options.
-- Add any small cookie-parsing dependency selected during implementation if it makes the code clearer and safer for student maintainers.
-- Add unit tests for validation, error mapping, cookie settings, expiration timestamps, and warning timestamps.
+- Add and validate `SESSION_COOKIE_SECURE` and `SESSION_COOKIE_SAME_SITE`; require secure cookies in production.
+- Document the new values in the development and production environment examples and add the agreed development values to the ignored local environment file.
+- Add `backend/auth/firebase-auth-rest.js` for Firebase Authentication REST calls and safe error mapping. Return only the ID token and safe user metadata needed by later routes; do not retain or return Firebase refresh tokens.
+- Add `backend/auth/session.js` for session creation, verification with revocation checking, timing calculation, and consistent set/clear cookie options using the cookie name `session`.
+- Do not add a cookie-parsing dependency in this chunk. Reconsider `cookie-parser` or another small dependency when Chunk 3 introduces request-cookie handling.
+- Add unit tests for configuration validation, safe Firebase error mapping, malformed and unavailable upstream responses, refresh-token exclusion, session creation, revocation checking, cookie settings, expiration timestamps, and warning timestamps.
 - Add JSDoc that explains parameters, return values, asynchronous failures, and why each security-sensitive operation exists.
 
 **Out of scope:** Routing, browser integration, and protection of existing data endpoints.
@@ -861,6 +865,9 @@ The legacy authentication endpoints remain available only until the replacement 
 **Exit criteria:**
 
 - The new services are covered by tests but are not yet used by production request paths.
+- The existing `server.js` routes do not import or invoke the new authentication services.
+- Development configuration uses a replaceable Firebase Web API key placeholder until the project key is supplied; no live Firebase REST request is required by this chunk.
+- No new runtime dependency is introduced.
 - Secrets, credentials, ID tokens, session cookies, and Firebase error payloads are not logged.
 - Existing application behavior remains unchanged.
 
