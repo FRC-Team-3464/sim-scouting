@@ -1,7 +1,15 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
+import { FieldValue } from "firebase-admin/firestore";
 import { loadConfiguration } from "./config.js";
 import { initializeFirebase } from "./firebase.js";
+import {
+    createAuthenticatedScoutingRecord,
+    isSharedTeamIndexPath,
+} from "./data/scouting-record.js";
+import { createCsrfProtection } from "./middleware/csrf.js";
+import { createRequireAuthentication } from "./middleware/require-authentication.js";
 import { createAuthenticationRouter } from "./routes/auth.js";
 
 const configuration = loadConfiguration();
@@ -13,10 +21,13 @@ const authenticationRouter = createAuthenticationRouter({
     auth,
     configuration,
 });
+const csrfProtection = createCsrfProtection({ configuration });
+const requireAuthentication = createRequireAuthentication({ auth });
 const PORT = configuration.port;
 const corsAllowedOrigin = configuration.corsAllowedOrigin;
 
 app.use(express.json());
+app.use(cookieParser());
 app.use((req, res, next) => {
     res.setHeader(
         "Access-Control-Allow-Origin",
@@ -57,8 +68,9 @@ async function sha256(message) {
     return hashHex;
 }
 const read = async (req, res) => {
-    const { path } = req.body;
     try {
+        const { path } = req.body || {};
+
         if (!path) {
             return res.status(400).send("Missing required fields");
         }
@@ -70,38 +82,54 @@ const read = async (req, res) => {
             return res.status(404).send("Document not found");
         }
         res.json(snapshot.data());
-    } catch (error) {
-        console.error(error);
-        res.status(500).send(`Error: ${error.message}`);
+    } catch {
+        console.error("Firestore read failed", {
+            route: "POST /api/read",
+            status: 500,
+            category: "FIRESTORE_READ_FAILED",
+            uid: req.user?.uid,
+        });
+        res.status(500).send("Unable to read data");
     }
 };
 
-router.get("/debug", async (req, res) => {
-    res.status(200).json({
-        value: "2tjqIwBuqNdsptLzSysO8wq0WUB3,ShL4NcaaGMNWxbvyIx8he1g5N5E2",
-    });
-});
+router.post(
+    "/write",
+    requireAuthentication,
+    csrfProtection.protectJsonRequest,
+    async (req, res) => {
+        try {
+            const { path, data } = req.body || {};
 
-router.post("/write", async (req, res) => {
-    try {
-        const { path, data } = req.body;
+            if (!path || !data) {
+                return res.status(400).send("Missing required fields");
+            }
 
-        if (!path || !data) {
-            return res.status(400).send("Missing required fields");
+            const pathSegments = path.split("/");
+            const docRef = db.doc(pathSegments.join("/"));
+            const documentData = isSharedTeamIndexPath(path)
+                ? data
+                : createAuthenticatedScoutingRecord(
+                    data,
+                    req.user,
+                    () => FieldValue.serverTimestamp(),
+                );
+            await docRef.set(documentData, { merge: true });
+
+            res.send("Data written successfully");
+        } catch {
+            console.error("Firestore write failed", {
+                route: "POST /api/write",
+                status: 500,
+                category: "FIRESTORE_WRITE_FAILED",
+                uid: req.user?.uid,
+            });
+            res.status(500).send("Unable to write data");
         }
+    },
+);
 
-        const pathSegments = path.split("/");
-        const docRef = db.doc(pathSegments.join("/"));
-        await docRef.set(data, { merge: true });
-
-        res.send("Data written successfully");
-    } catch (error) {
-        console.error(`Error writing data: ${error.message}`);
-        res.status(500).send(`Error: ${error.message}`);
-    }
-});
-
-router.post("/read", read);
+router.post("/read", requireAuthentication, read);
 
 router.post("/login", async (req, res) => {
     try {

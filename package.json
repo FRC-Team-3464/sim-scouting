@@ -11,6 +11,7 @@
     "firebase-admin": "^14.2.0"
   },
   "scripts": {
+    "debug:claim": "NODE_ENV=development node ./backend/scripts/set-debug-claim.js",
     "dev": "NODE_ENV=development nodemon ./backend/server.js",
     "start": "NODE_ENV=production node ./backend/server.js",
     "test:backend": "node --test backend/test/*.test.js"

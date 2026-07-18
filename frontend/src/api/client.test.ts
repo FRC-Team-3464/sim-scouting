@@ -91,6 +91,38 @@ describe("central API client", () => {
         expect(reauthenticate).toHaveBeenCalledTimes(2);
     });
 
+    test("replays the unchanged scouting mutation after reauthentication", async () => {
+        const scoutingBody = {
+            path: "3464/12",
+            data: { teamNumber: 3464, matchNumber: 12 },
+        };
+        const fetchMock = vi.mocked(fetch);
+        fetchMock
+            .mockResolvedValueOnce(jsonResponse({ csrfToken: SIGNED_CSRF_TOKEN }))
+            .mockResolvedValueOnce(jsonResponse({ message: "expired" }, 401))
+            .mockResolvedValueOnce(jsonResponse({ saved: true }));
+        const reauthenticate = vi.fn().mockResolvedValue(true);
+        const { apiRequest, setReauthenticationHandler } =
+            await loadFreshClient();
+        setReauthenticationHandler(reauthenticate);
+
+        await expect(
+            apiRequest("/write", {
+                method: "POST",
+                body: scoutingBody,
+            }),
+        ).resolves.toEqual({ saved: true });
+
+        expect(reauthenticate).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+        expect(fetchMock.mock.calls[1]?.[1]?.body).toBe(
+            JSON.stringify(scoutingBody),
+        );
+        expect(fetchMock.mock.calls[2]?.[1]?.body).toBe(
+            JSON.stringify(scoutingBody),
+        );
+    });
+
     test("does not reauthenticate credential failures when disabled", async () => {
         const fetchMock = vi.mocked(fetch);
         fetchMock.mockResolvedValueOnce(

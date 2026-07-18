@@ -19,6 +19,37 @@ npm run lint
 
 The recorded environment uses Node.js 22, ESLint 9.39.1, and `typescript-eslint` 8.48.1. Line numbers are a snapshot and may move as source files change; the ESLint rule and affected code should be treated as the durable identifiers.
 
+## Chunk 7 update
+
+Chunk 7 retains the unreliable synthetic scouting generator for possible future
+redesign. Its four existing findings therefore remain in the baseline. No new
+lint finding was introduced by protected data routes or server-derived scouting
+attribution.
+
+Current result:
+
+| Measurement | Count |
+|---|---:|
+| Files with findings | 5 |
+| Errors | 21 |
+| Warnings | 0 |
+| Total findings | 21 |
+| Automatically fixable errors reported by ESLint | 10 |
+
+Current findings by rule:
+
+| Severity | Rule | Count |
+|---|---|---:|
+| Error | `prefer-const` | 10 |
+| Error | `@typescript-eslint/no-unused-vars` | 8 |
+| Error | `@typescript-eslint/no-explicit-any` | 1 |
+| Error | `react-hooks/immutability` | 1 |
+| Error | `@typescript-eslint/no-unused-expressions` | 1 |
+
+The remaining findings are limited to `CheckboxDropdown.tsx`,
+`LocalStored.tsx`, `MatchForm.tsx`, `pitScoutingForm.tsx`, and `seed.tsx`. Their
+remediation remains separate technical debt.
+
 ## Chunk 6 update
 
 The session-authentication frontend migration removed obsolete cookie, password-hash, debug-whitelist, and legacy API code rather than cosmetically repairing it. This resolved 19 errors and all 3 warnings as a direct consequence of the approved behavior change. No new lint finding was introduced by the centralized API client, authentication provider, protected routes, expiration UI, or frontend tests.
@@ -43,7 +74,10 @@ Current findings by rule:
 | Error | `react-hooks/immutability` | 1 |
 | Error | `@typescript-eslint/no-unused-expressions` | 1 |
 
-The remaining findings are limited to `CheckboxDropdown.tsx`, `LocalStored.tsx`, `MatchForm.tsx`, `pitScoutingForm.tsx`, and `seed.tsx`. Their remediation remains separate technical debt.
+At the end of Chunk 6, the remaining findings were limited to
+`CheckboxDropdown.tsx`, `LocalStored.tsx`, `MatchForm.tsx`,
+`pitScoutingForm.tsx`, and `seed.tsx`. The table above remains the current
+Chunk 7 baseline because the seed feature was retained.
 
 ## Original Chunk 4 snapshot
 

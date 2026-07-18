@@ -17,7 +17,7 @@ Built for the First Robotics Competition REBUILT 2026
 - Questionnaire detailing all the data about another team
 - Offline storage, for the terrible connection found at competitions
 - Linked to usernames (less false data)
-- Google Auth for creating users
+- Firebase Authentication email/password accounts
 
 ## Installation
  Clone the repository and install dependencies. Node must be first installed
@@ -26,11 +26,12 @@ Built for the First Robotics Competition REBUILT 2026
 git clone https://github.com/FRC-Team-3464/sim-scouting
 cd sim-scouting
 npm install
+npm --prefix frontend install
 ```
 
 To build frontend:
 ```
-npm build
+npm --prefix frontend run build
 ```
 
 # Documentation
@@ -39,22 +40,19 @@ Working with the best free database:
 - SERVER SIDE (backend/server.js)
 --
   - implementation of [node.js](https://nodejs.org/docs/latest/api/) and [express.js](https://expressjs.com/en/5x/api.html)
-  - GET to "/debug": works with debug.tsx. just delivers which uid's to allow
-  - POST to "/write": writes to theh database
+  - POST to "/write": writes authenticated scouting data with CSRF protection and server-derived scout identity
 > [!WARNING]
 > to write you must submit a JSON.
-  - POST to "/read": reads documents. submit a path
-  - POST to "/signup": creates users
-  - POST to "/login": fetches hashed passwords to authenticate users
-  - POST to "/register": make user
+  - POST to "/read": reads documents for an authenticated user; submit a path
+  - `/auth/*`: registration, login, logout, session, and CSRF routes
 -
 
 ### Requests  
 Every request on the server side has 2 properties: req (request), and res (response). by using app.use(express.json()), both of these properties will be jsons. [Request types](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Methods).
-- CLIENT SIDE (frontend/src/scripts/firebase.tsx)
---
-  - Most of the functions simply make a post request to server.js, except
-  - register(): uses sha256 to encrypt passwords. If you don't know what this does, ask Ms. Meyer, and say sam sent you
+The React application uses `frontend/src/api/client.ts` and communicates only
+with Node. Password verification, Firebase tokens, session cookies, and
+Firestore access are handled by the backend. See `TECHNICAL_DOCUMENTATION.md`
+for the current API and security design.
 ## Components (frontend/src/components)
 
 ### AutoResizeTextArea 
@@ -132,16 +130,7 @@ MultiCounterInput.tsx
 ## Scripts
 
 ### seed.tsx
-- Function that returns fake match data as a __*JSON*__.
-
-### user.tsx
-- Has functions that relate to reading and generating the users cookie.
-
-### debug.tsx
-- fetches which users have higher access
-
-### firebase.tsx
-- view Firebase section of README.md
+- Retained debug-visible generator for synthetic match data. It has known inconsistencies and may be redesigned with the future purpose-specific data API.
 
 ## Other
 

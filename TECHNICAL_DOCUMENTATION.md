@@ -47,8 +47,9 @@ The completed authentication work is traceable to the implementation chunks in [
 | 4 | Removed unused dependencies, migrated to modular Firebase Admin 14.2, updated compatible packages, recorded the frontend lint baseline, and documented the six unavoidable moderate transitive findings | Technology stack, testing/quality status, and source index |
 | 5 | Added signed, session-bound CSRF tokens, exact Origin and JSON checks, credentialed CORS, CSRF cookie rotation, safe rejection logs, configuration validation, and security tests | CORS, session API, CSRF model, required environment, operational checklist, and testing sections |
 | 6 | Migrated React to a centralized credentialed API client, verified authentication context, protected routes, configurable expiration warning, in-place reauthentication, bounded retry policy, and frontend tests | Frontend session model, API behavior, routing, draft preservation, security status, testing, and source index |
+| 7 | Protected generic data routes with verified sessions, added CSRF to writes, derived scouting attribution on the server, added restricted debug-claim administration, removed the public debug list, and retained the legacy seed tool for later redesign | Data API contract, attribution model, security assessment, testing, operations, and source index |
 
-Chunk 7 and later work is not described as current behavior. In particular, the legacy generic data and debug operations do not yet enforce the verified session on the server.
+Chunk 8 and later deployment and legacy-removal work is not described as current behavior.
 
 ## 3. Technology stack
 
@@ -74,8 +75,10 @@ sim-scouting/
 ├── .env.production.example      Backend production configuration template
 ├── backend/
 │   ├── auth/                     Firebase REST sign-in and session helpers
-│   ├── middleware/csrf.js        Signed CSRF-token protection
+│   ├── data/scouting-record.js   Server-owned scouting attribution
+│   ├── middleware/               Session authentication and CSRF protection
 │   ├── routes/auth.js            Firebase session-authentication API
+│   ├── scripts/                  Restricted debug-claim administration
 │   ├── test/                     Backend unit and HTTP integration tests
 │   ├── config.js                 Environment loading and validation
 │   ├── firebase.js               Firebase Admin initialization
@@ -91,7 +94,7 @@ sim-scouting/
 │   │   ├── auth/                 Session context, route guards, warning/modal
 │   │   ├── components/           Reusable form controls
 │   │   ├── pages/                Screens and scouting workflows
-│   │   ├── scripts/              Configuration and seed helpers
+│   │   ├── scripts/              API configuration and synthetic generator
 │   │   └── test/                 Shared frontend test setup
 │   ├── vite.config.ts            React and Tailwind Vite plugins
 │   ├── tsconfig*.json            Browser and build TypeScript settings
@@ -130,7 +133,7 @@ Route paths are case-insensitive by React Router's default matching behavior, wh
 
 `ProtectedRoute` blocks `/`, `/match`, `/stored`, and `/pitScouting` while the startup request is pending. It redirects only after a confirmed `401`; network and server failures display a retryable session-check error rather than misclassifying the user as anonymous. `/login` and `/signup` remain public. A requested protected path is retained through login.
 
-The top-level debug whitelist request has been removed. Home and the scouting forms use only the verified session's `debug` boolean for current UI visibility and validation behavior. Chunk 7 must still enforce that claim on backend debug/seeding operations; frontend visibility is not authorization.
+The top-level debug whitelist request and public UID-list endpoint have been removed. Home, the scouting forms, and the retained seed control use only the current user's `debug` boolean from Node's verified session response for display and client-side behavior. The seed tool still writes through generic `/api/write`; it is known-buggy legacy convenience code rather than a separate server-authorized operation. Any future privileged debug endpoint must enforce the custom claim on the server.
 
 The six-hour session remains absolute. React schedules a non-blocking warning from `sessionExpirationWarningAt`. A warned user must reauthenticate before starting a new Match or Pit form, including through a direct URL. At expiration or after an authenticated request receives `401`, a non-dismissible modal replaces the session without unmounting the active page.
 
@@ -170,7 +173,7 @@ The local record remains after a successful upload. It is therefore a local hist
 
 `PitScoutingForm.tsx` captures:
 
-- scout name and scouting team;
+- scouting team;
 - event, match number, and observed team;
 - chassis length and width;
 - starting and maximum height;
@@ -192,7 +195,7 @@ Both scouting forms save the record to `localStorage` before attempting a networ
 - retries the selected record via `writeToDb`;
 - deletes the selected item;
 - attempts to clear all local storage;
-- exposes synthetic database seeding when debug mode is enabled.
+- exposes the retained synthetic match generator when the verified session reports `debug: true`.
 
 Important behavior:
 
@@ -255,16 +258,6 @@ The repository-level Vercel configuration separately defines headers for `/api/(
 
 All endpoints are under `/api`.
 
-#### `GET /debug`
-
-Returns a hard-coded comma-separated UID whitelist:
-
-```json
-{ "value": "uid1,uid2" }
-```
-
-No authentication is required, so the list is public. Authorization is enforced only by frontend display/validation logic and therefore is not a security boundary.
-
 #### `POST /write`
 
 Request:
@@ -276,13 +269,28 @@ Request:
 }
 ```
 
-The server passes `path` directly to `db.doc()` and performs `set(data, { merge: true })`. It requires truthy `path` and `data`, but does not authenticate the caller, authorize the target path, validate the path shape, or validate the data schema.
+The route requires a valid, non-revoked Firebase session plus the exact allowed Origin, JSON content type, and a session-bound CSRF token. It still accepts a caller-selected path and performs a merge write without a purpose-specific schema; replacing that generic design is deferred.
+
+For every document except the shared `datas/data` team index, Node removes caller-provided identity, timestamp, debug, and role fields and adds:
+
+```json
+{
+  "scoutUid": "verified-firebase-uid",
+  "scoutName": "Verified Scout Name",
+  "submittedAt": "Firestore server timestamp"
+}
+```
+
+The values come from the verified session and Firebase server time. The browser cannot choose another scout or grant itself a role through the request body. `datas/data` retains its existing `{team: [...]}` shape.
 
 Responses:
 
 - `200` text: `Data written successfully`
 - `400` text: missing fields
-- `500` text: Firebase or runtime error
+- `401` JSON: missing, invalid, expired, revoked, disabled, or deleted-user session
+- `403` JSON: invalid Origin or CSRF token
+- `415` JSON: non-JSON content type
+- `500` text: generic write failure without Firebase details
 
 #### `POST /read`
 
@@ -294,14 +302,15 @@ Request:
 
 The server retrieves the document and returns its data object.
 
+The route requires a valid, non-revoked Firebase session. It does not require a CSRF token because it does not change state, even though the retained legacy contract uses POST.
+
 Responses:
 
 - `200` JSON: document fields
 - `400` text: missing path
 - `404` text: document does not exist
-- `500` text: Firebase or runtime error
-
-Like `/write`, this is an unauthenticated arbitrary-document primitive backed by Admin SDK privileges.
+- `401` JSON: missing, invalid, expired, revoked, disabled, or deleted-user session
+- `500` text: generic read failure without Firebase details
 
 #### `POST /register`
 
@@ -345,7 +354,7 @@ The preceding `/register` and `/login` endpoints are legacy behavior retained te
 
 ### 6.4 Backend-managed session authentication API
 
-The new API is mounted under `/api/auth`. React migration to these routes is planned for the next implementation chunk.
+The current React application uses the API mounted under `/api/auth`.
 
 #### `GET /auth/csrf`
 
@@ -421,7 +430,32 @@ Cookie authentication needs CSRF protection because browsers attach cookies auto
 
 A copied or injected token cannot validate without the matching private cookie and server secret. Authentication changes rotate the binding: successful registration/login clear the pre-authentication token, and React must obtain a new session-bound token before another mutation. Rejections use generic public messages and safe log categories without recording origins, request bodies, credentials, cookies, or token values.
 
-CSRF protection currently applies only to the new `/api/auth/register`, `/api/auth/login`, and `/api/auth/logout` routes. Applying it to the legacy generic `/write` endpoint is intentionally out of scope until data routes migrate to authenticated, purpose-specific APIs.
+CSRF protection applies to `/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, and `/api/write`. `/api/read` requires authentication but not CSRF because it does not change server state.
+
+### 6.6 Debug-claim administration
+
+Debug status is a Firebase custom claim, not a browser-controlled allow list.
+Only a trusted developer with the backend service account can change it. From
+the repository root, use the development-only command:
+
+```bash
+npm run debug:claim -- <firebase-uid> true
+npm run debug:claim -- <firebase-uid> false
+```
+
+`backend/scripts/set-debug-claim.js` validates the UID and explicit boolean,
+preserves every unrelated custom claim, updates `debug`, and revokes the user's
+existing sessions. The user must log in again before React receives the changed
+claim. The command logs only the UID, new boolean state, and safe Firebase error
+category; it never prints credentials, tokens, cookies, or service-account data.
+
+The obsolete public `/api/debug` UID-list endpoint has been removed. The
+existing synthetic seed control is intentionally retained for local
+experimentation even though its generated team/path behavior is inconsistent.
+It uses authenticated, CSRF-protected `/api/write`, but there is no distinct
+server-side seed operation or claim check beyond the verified claim that React
+uses to display the control. Its redesign is deferred to the future
+purpose-specific data API proposal.
 
 ## 7. Data model
 
@@ -451,7 +485,9 @@ interface TeamIndexDocument {
 ```ts
 interface MatchScoutingDocument {
   scoutingTeam: number;
-  name?: string;
+  scoutUid: string;
+  scoutName: string;
+  submittedAt: FirebaseFirestore.Timestamp;
   eventName: string;
   teamNumber: number;
   matchNumber: number;
@@ -496,13 +532,15 @@ interface MatchScoutingDocument {
 }
 ```
 
-There is no stored submission ID, timestamp, authenticated UID, schema version, upload status, or server-generated audit metadata.
+There is no stored submission ID, schema version, or upload status. The backend now adds an authenticated UID/name and server submission timestamp.
 
 ### 7.3 Pit scouting document
 
 ```ts
 interface PitScoutingDocument {
-  name?: string;
+  scoutUid: string;
+  scoutName: string;
+  submittedAt: FirebaseFirestore.Timestamp;
   teamNumber: number;
   scoutingTeam: number;
   eventName: string;
@@ -608,20 +646,19 @@ The current production example files have not yet been migrated to that decision
 
 ## 9. Security assessment
 
-The most important current risk is that Firebase Admin operations are exposed without server-side authentication or authorization.
+The most important current risk is that authenticated Firebase Admin operations still accept caller-selected Firestore paths without purpose-specific authorization.
 
 ### Critical
 
-1. **Arbitrary Firestore access:** any caller can submit a document path to `/read` or `/write`. Because the server uses Admin SDK credentials, Firestore security rules do not constrain these operations.
-2. **Password-hash disclosure and modification:** the same generic endpoints can access `auth/*`. Unsalted SHA-256 hashes are fast to crack and act as password verifiers.
-3. **Unprotected server identity:** React now uses verified session identity, but generic `/write` still trusts caller-supplied record fields and does not require a session. A direct caller can therefore spoof scouting attribution until Chunk 7 derives it on the server.
+1. **Generic Firestore authorization:** any authenticated user can submit a document path to `/read` or `/write`. Because the server uses Admin SDK credentials, Firestore security rules do not constrain these operations by path or role.
+2. **Password-hash disclosure and modification:** an authenticated user can still target retained `auth/*` documents through the generic endpoints. Unsalted SHA-256 hashes are fast to crack and act as password verifiers until Chunk 9 removes them.
 
 ### High
 
 1. No rate limiting exists on login, registration, reads, or writes.
 2. Registration is public and the custom hash write is non-atomic.
 3. API input has no schema, size, path, or ownership validation beyond basic truthiness.
-4. Debug UID data and privileged UI capability are exposed publicly and enforced only in the client.
+4. Debug-mode form validation is a client-side convenience rather than a data-authorization boundary; purpose-specific server schemas remain future work.
 
 ### Authentication migration status
 
@@ -632,11 +669,14 @@ The replacement design keeps all Firebase interaction behind Node rather than ad
 3. verifies sessions and revocation through Firebase Admin;
 4. derives identity and the `debug` claim from verified Firebase data;
 5. protects authentication mutations with signed, session-bound CSRF tokens;
-6. avoids returning Firebase tokens or session-cookie values to React.
+6. avoids returning Firebase tokens or session-cookie values to React;
+7. requires verified, non-revoked sessions for generic reads and writes;
+8. requires signed CSRF protection for writes;
+9. derives `scoutUid`, `scoutName`, and `submittedAt` on the server.
 
 React now uses `/api/auth/*`, restores verified sessions during startup, and no longer hashes passwords, writes `auth/{name}`, handles Firebase custom tokens, or derives authentication from readable cookies. The legacy backend authentication routes and existing password-hash documents remain until the replacement is proven through the protected-data and deployment chunks.
 
-The security migration is not complete. Generic `/read` and `/write` still accept unauthenticated caller-selected paths and identity fields. The debug endpoint and seeding operations also lack server-side claim enforcement. Chunk 7 applies the verified session and CSRF boundary to those operations and derives scout identity on the server. Privileged operations must enforce verified custom claims on the server; hiding frontend controls is not authorization.
+The security migration is not complete. Generic `/read` and `/write` still accept authenticated caller-selected paths without path authorization or runtime schemas. The obsolete public debug UID-list endpoint is gone, but the known-buggy synthetic seed UI remains over the same generic write route. Purpose-specific endpoints, seed redesign, and removal of the legacy password-hash routes/documents remain later work.
 
 ## 10. Reliability and data-integrity assessment
 
@@ -669,9 +709,9 @@ The backend uses Node's built-in test runner and Supertest. Run all backend test
 npm run test:backend
 ```
 
-The current suite contains 106 passing tests covering configuration validation, Firebase initialization, Firebase password REST handling, session creation and verification, authentication HTTP behavior, safe error mapping, signed CSRF token construction, origin/content-type rejection, cookie attributes, token rotation, and logout cleanup. Firebase services are replaced with test doubles, so the suite does not require a live Firebase project. Supertest HTTP integration tests bind a temporary localhost port.
+The current suite contains 118 passing tests covering configuration validation, Firebase initialization, Firebase password REST handling, session creation and verification, authentication HTTP behavior, safe error mapping, signed CSRF token construction, origin/content-type rejection, cookie attributes, token rotation, logout cleanup, protected-route session rejection, identity-spoof prevention, and safe debug-claim administration. Firebase services are replaced with test doubles, so the suite does not require a live Firebase project. Supertest HTTP integration tests bind a temporary localhost port.
 
-The frontend uses Vitest, jsdom, and React Testing Library. Its 18 tests cover the centralized client, credential and CSRF behavior, retry limits, startup session restoration, protected routing, verified identity/debug state, login failures, registration validation and success, logout, warning/expiration behavior, direct form-route gating, and in-place reauthentication that preserves active React form state. Framework-independent Playwright acceptance tests are deferred to Chunks 7–8 when the complete protected browser-to-backend boundary exists.
+The frontend uses Vitest, jsdom, and React Testing Library. Its 19 tests cover the centralized client, credential and CSRF behavior, retry limits, unchanged scouting-mutation replay after reauthentication, startup session restoration, protected routing, verified identity/debug state, login failures, registration validation and success, logout, warning/expiration behavior, direct form-route gating, and in-place reauthentication that preserves active React form state. Playwright is intentionally not added during this proposal; repeatable manual browser checks complement the backend and frontend automated suites and browser automation can be reconsidered after the planned React rewrite.
 
 Recommended minimum coverage:
 
@@ -683,7 +723,7 @@ Recommended minimum coverage:
 - end-to-end login and scouting workflows;
 - deployment smoke tests for `/`, direct SPA routes, API health, and CORS.
 
-The production frontend build completes successfully. Removing the obsolete authentication code reduced the separately documented lint debt from 40 errors and 3 warnings to 21 errors and no warnings. The remaining findings are pre-existing issues outside this authentication chunk. Verify the current state with:
+The production frontend build completes successfully. Removing obsolete authentication code reduced the separately documented lint debt from 40 errors and 3 warnings to 21 errors and no warnings. The retained seed generator accounts for four of those existing errors. The remaining findings are pre-existing issues outside this authentication chunk. Verify the current state with:
 
 ```bash
 npm --prefix frontend run build
@@ -697,7 +737,6 @@ The frontend dependency audit currently reports zero vulnerabilities. The root a
 
 ### Phase 1: secure the boundary
 
-- Apply the verified React session to backend data and debug operations.
 - Remove the legacy password-verification routes and password hashes from Firestore after the frontend migration.
 - Disable generic `/read` and `/write` endpoints; introduce scoped endpoints and runtime schemas.
 - Enforce roles server-side and add rate limiting.
@@ -737,7 +776,7 @@ Before a competition deployment:
 - test CSRF initialization, registration, login, session restoration, logout, match scouting, pit scouting, offline save, and retry on representative mobile devices;
 - confirm Firestore paths and data are isolated to the intended event;
 - test duplicate team/match submissions and decide the desired conflict behavior;
-- verify debug/seeding capability is unavailable to ordinary users;
+- verify debug status changes require the restricted administration script and a new login, and treat the retained seed control as an unsupported development convenience;
 - export or back up existing scouting data;
 - monitor API errors, authentication failures, and rejected submissions during the event.
 
@@ -749,8 +788,11 @@ Before a competition deployment:
 | `backend/firebase.js` | Modular Firebase Admin initialization |
 | `backend/auth/firebase-auth-rest.js` | Firebase password authentication over the REST API |
 | `backend/auth/session.js` | Firebase session creation, verification, timing, and cookie options |
+| `backend/data/scouting-record.js` | Remove spoofed fields and add verified scout attribution and server time |
 | `backend/middleware/csrf.js` | Signed, binding-aware CSRF token issuance and validation |
+| `backend/middleware/require-authentication.js` | Verify non-revoked session cookies and attach trusted claims |
 | `backend/routes/auth.js` | Backend-managed registration, login, session, logout, and CSRF endpoints |
+| `backend/scripts/set-debug-claim.js` | Restricted debug-claim grant/removal with session revocation |
 | `backend/server.js` | Express composition, CORS, Firestore access, and legacy API routes |
 | `backend/test/*` | Backend unit and HTTP integration tests |
 | `frontend/src/App.tsx` | Route composition |
@@ -763,5 +805,5 @@ Before a competition deployment:
 | `frontend/src/api/client.ts` | Credentialed HTTP requests, CSRF lifecycle, safe errors, and bounded retries |
 | `frontend/src/api/scouting.ts` | Existing team-index and generic Firestore request behavior through the central client |
 | `frontend/src/auth/*` | Verified session context, protected routes, warnings, and in-place reauthentication |
-| `frontend/src/scripts/seed.tsx` | Synthetic match-record generator |
+| `frontend/src/scripts/seed.tsx` | Retained legacy synthetic match generator with known inconsistencies |
 | `frontend/src/components/*` | Reusable scouting inputs and footer |

@@ -172,9 +172,6 @@ const MatchForm: React.FC = () => {
 
         const data = {
             scoutingTeam: scoutingTeam,
-            // Chunk 7 will derive this identity on the server. Until then, use
-            // only the name from Node's verified session response.
-            name: user?.name,
             eventName: eventName,
             teamNumber: teamNumber,
             matchNumber: matchNumber,
@@ -219,7 +216,6 @@ const MatchForm: React.FC = () => {
             robotError: robotErrorsCheck,
         };
 
-        console.log(data);
         /*
         The path for block of data will be submitted as follows:
         /{eventName}/{teamNumber}/{matchNumber}/{timestamp}, timestamp is not finished
@@ -236,7 +232,6 @@ const MatchForm: React.FC = () => {
                 `${teamNumber?.toString()}/${matchNumber?.toString()}`,
                 data,
             );
-            console.log(val);
             if (!val) {
                 setSent(true);
             } else {

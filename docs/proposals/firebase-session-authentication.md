@@ -413,6 +413,8 @@ backend/
 ├── auth/
 │   ├── firebase-auth-rest.js         Email/password verification via Firebase
 │   └── session.js                    Session creation and cookie options
+├── data/
+│   └── scouting-record.js            Server-owned scouting attribution
 ├── middleware/
 │   ├── require-authentication.js     Session-cookie verification
 │   └── csrf.js                       CSRF issue/verification logic
@@ -426,11 +428,12 @@ Responsibilities:
 
 | File | Responsibility |
 |---|---|
-| `server.js` | Create Express, apply JSON/CORS middleware, mount the auth router, retain existing scouting/debug routes, and listen on the configured port |
+| `server.js` | Create Express, apply JSON/CORS/cookie middleware, mount the auth router, retain the generic scouting routes, and listen on the configured port |
 | `config.js` | Load the selected environment and export validated, typed configuration values without exposing secrets in logs |
 | `firebase.js` | Initialize Firebase Admin once and export the Admin Auth and Firestore clients |
 | `auth/firebase-auth-rest.js` | Call Firebase Authentication REST endpoints and normalize Firebase errors into application error categories |
 | `auth/session.js` | Create Firebase session cookies and define consistent set/clear cookie options |
+| `data/scouting-record.js` | Remove browser-controlled identity and add verified scout attribution to scouting records |
 | `middleware/require-authentication.js` | Read and verify the session cookie and attach the decoded Firebase user to the request |
 | `middleware/csrf.js` | Create CSRF tokens and reject invalid state-changing requests |
 | `routes/auth.js` | Define the `/api/auth/*` HTTP contracts and coordinate the authentication services |
@@ -453,7 +456,7 @@ The extraction should not move or redesign unrelated code merely to make the dir
 - Firestore `/read` implementation;
 - Firestore `/write` implementation;
 - team-index behavior;
-- debug response behavior beyond protecting it and no longer exposing the UID list;
+- removal of the obsolete public debug UID-list response;
 - application startup and port listening;
 - existing error handling for non-authentication routes.
 
@@ -492,7 +495,6 @@ At minimum, require a verified session for:
 
 - `/api/read`;
 - `/api/write`;
-- debug/seeding operations;
 - any new scouting read or write route.
 
 Authentication answers “who is calling.” It does not answer “which documents may they access.” By decision, generic caller-provided Firestore paths remain in place for this change and are protected only by authentication. Their authorization risk is accepted temporarily and must be handled in a separate purpose-specific API change.
@@ -506,11 +508,14 @@ const authenticatedRecord = {
     ...validatedRecord,
     scoutUid: req.user.uid,
     scoutName: req.user.name || req.user.email,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    submittedAt: admin.firestore.FieldValue.serverTimestamp(),
 };
 ```
 
-Node must ignore or overwrite `name`, `uid`, or role information supplied by React.
+Node must ignore or overwrite `name`, `uid`, `scoutUid`, `scoutName`,
+`submittedAt`, debug flags, or role information supplied by React. The shared
+`datas/data` index remains unchanged because it is not an individual scouting
+submission.
 
 ### 9.5 Logging
 
@@ -636,7 +641,13 @@ Node reads the claim from the verified session and exposes only the current user
 }
 ```
 
-Server-side checks are still required for debug operations; hiding UI controls is not authorization.
+The existing synthetic seeding control remains available in React when the
+verified session response contains `debug: true`. It still writes through the
+generic authenticated `/api/write` route and is retained as known-buggy legacy
+code for possible future redesign. It is not a separate server-authorized debug
+operation: while generic writes accept caller-selected paths and data, hiding
+the control is not a complete authorization boundary. Any future purpose-built
+debug endpoint must independently enforce `debug: true` on the server.
 
 Changing a custom claim does not rewrite an existing session cookie. The affected user must log out and log back in to receive the updated claim. For immediate removal, revoke that user's sessions as part of the administrative operation.
 
@@ -827,6 +838,12 @@ Firebase Authentication and Firestore emulators should be used where practical t
 - reauthentication replaces the session without clearing an active form;
 - session expiration opens required in-place reauthentication without clearing an active form;
 - an expired submission remains in local storage and can be retried after login;
+- anonymous `/api/read` and `/api/write` requests return `401`;
+- an authenticated scouting write succeeds only with a valid session-bound CSRF token;
+- Firestore stores `scoutUid`, `scoutName`, and `submittedAt` from the verified session and does not store a browser-supplied identity;
+- `datas/data` retains only the shared team index fields rather than scout attribution;
+- granting or removing `debug` with the restricted script revokes the old session and requires a new login;
+- `/api/debug` is unavailable, while the retained seed control appears on `/stored` only after a session with the verified `debug: true` claim is established;
 - logout invalidates the local browser session;
 - offline scouting records remain available after authentication changes.
 
@@ -1017,7 +1034,7 @@ The legacy authentication endpoints remain available only until the replacement 
 - Retry transient network and `5xx` failures at most twice only for safe GET requests. Do not automatically retry mutations for those failures until the API provides idempotency protection.
 - Keep scouting payloads in local storage regardless of authentication or retry outcome.
 - Use Vitest with React Testing Library for API, authentication-state, and React behavior tests. Keep non-React session and retry logic independently testable so it can survive a planned frontend rewrite.
-- Add framework-independent Playwright acceptance coverage during the protected-data and deployment work in Chunks 7 and 8, when the complete browser-to-backend security boundary is available.
+- Use the existing Vitest, React Testing Library, and backend integration suites plus a documented manual browser checklist for end-to-end verification. Browser automation can be reconsidered after the planned React rewrite if its maintenance cost becomes justified.
 
 **Out of scope:** Removing the legacy backend routes and old Firestore authentication documents.
 
@@ -1037,13 +1054,22 @@ The legacy authentication endpoints remain available only until the replacement 
 **Scope:**
 
 - Add `backend/middleware/require-authentication.js`.
-- Require a valid session for `/read`, `/write`, and debug or seeding operations.
+- Require a valid session for `/read` and `/write`.
 - Apply CSRF protection to state-changing application endpoints.
 - Derive UID and scout identity from the verified session instead of request data.
 - Add the restricted `backend/scripts/set-debug-claim.js` administration script.
-- Enforce the Firebase `debug: true` custom claim on the server.
+- Remove the obsolete public debug UID-list endpoint and keep debug status derived only from the Firebase custom claim verified by Node.
 - Verify offline submission retry after session expiration and reauthentication.
 - Add authorization and identity-spoofing tests.
+
+**Recorded implementation decisions:**
+
+- Do not preserve the browser-supplied legacy `name` field for compatibility with old scouting data. The development database may be recreated for the new season.
+- For scouting documents, discard caller-provided identity and role fields and add the verified session values as `scoutUid` and `scoutName` plus a Firestore server timestamp named `submittedAt`.
+- Keep the shared `datas/data` team index free of scout attribution because it is index metadata rather than an individual scouting submission.
+- Retain the existing frontend synthetic-data generator and debug-only seed control unchanged. The feature has known inconsistencies and writes through the generic authenticated endpoint; repair or replacement belongs with the future purpose-specific data API proposal.
+- Remove the obsolete `/api/debug` endpoint that exposes a hard-coded UID list. The current user's debug status continues to come only from the verified Firebase custom claim returned by `/api/auth/session`.
+- Do not add Playwright in this proposal. Use Supertest, Vitest, React Testing Library, and a repeatable manual browser checklist; reconsider browser automation after the planned frontend rewrite.
 
 **Out of scope:** Replacing the generic `/read` and `/write` API design.
 
@@ -1052,6 +1078,7 @@ The legacy authentication endpoints remain available only until the replacement 
 - Anonymous, expired, disabled, revoked, and CSRF-invalid requests are rejected.
 - A client cannot choose another user's identity or grant itself debug access.
 - Valid authenticated scouting and offline-retry workflows continue to work.
+- The public debug UID-list endpoint is removed, while the known-buggy seed generator remains available only through the verified-debug frontend control.
 
 **Suggested commit:** `feat(security): protect scouting and debug operations`
 
@@ -1137,8 +1164,7 @@ The change is complete when:
 - `/api/auth/session` returns verified user identity and session timing.
 - Protected API calls reject missing, invalid, expired, and revoked sessions.
 - Scouting attribution is derived from the verified server identity.
-- Debug operations are authorized by Node, not only hidden by React.
-- Debug access is derived from a Firebase custom claim and enforced by Node.
+- Debug status is derived from a Firebase custom claim verified by Node, and no public debug UID list remains. The retained seed UI is a legacy convenience over generic writes, not a separate authorization boundary.
 - Session duration and expiration-warning intervals are configured in minutes and validated at startup.
 - Sessions expire after the configured duration and expose expiration and warning timestamps through `/api/auth/session`.
 - Users are warned at the configured threshold and can reauthenticate without losing an active scouting draft.
@@ -1158,10 +1184,10 @@ The change is complete when:
 4. **User migration:** Recreate the new-season user base as needed; no rollback retention window is required for obsolete `auth/*` documents.
 5. **Session duration:** Configure session duration and warning intervals in minutes. Start with a six-hour (`360` minute) absolute Firebase session and a `30` minute warning, and support in-place reauthentication so active scouting data is preserved.
 6. **Revocation checking:** Call `verifySessionCookie(sessionCookie, true)` on every protected request initially and measure the operational cost before optimizing.
-7. **Debug authorization:** Use a Firebase `debug` custom claim, assigned through a restricted backend script and enforced by Node.
+7. **Debug authorization:** Use a Firebase `debug` custom claim assigned through a restricted backend script. Node verifies the claim and returns only the current user's boolean through `/api/auth/session`; any future privileged debug endpoint must enforce it independently.
 8. **Password reset:** Add password reset in a separately reviewed implementation chunk rather than expanding the parallel session API work.
 9. **Frontend retry policy:** Allow at most two automatic retries after the original request. Retry `401` only after successful reauthentication, retry transient network/`5xx` failures only for safe GET requests, and do not retry mutations for uncertain failures without idempotency protection.
-10. **Frontend testing:** Use Vitest and React Testing Library for Chunk 6 logic and React behavior. Add framework-independent Playwright acceptance coverage when Chunks 7–8 provide the complete protected and deployed workflow.
+10. **Frontend testing:** Use Vitest and React Testing Library for frontend logic and behavior, backend integration tests for the API security boundary, and a repeatable manual browser checklist. Reconsider browser automation after the planned React rewrite rather than adding Playwright during this proposal.
 
 ## 21. Open decisions
 

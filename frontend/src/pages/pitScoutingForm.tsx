@@ -42,9 +42,6 @@ async function submitData() {
         eventName !== "" && teamnum !== null && matchNumber !== null;
 
     const data = {
-        
-        // Preserve the existing field until Chunk 7 derives it on the server.
-        name: user?.name,
         teamNumber: teamnum,
         scoutingTeam: scoutingTeam,
         eventName: eventName,
@@ -62,7 +59,6 @@ async function submitData() {
 
 
 
-    console.log(data);
     /*
     The path for block of data will be submitted as follows:
     /{eventName}/{teamnum}/{matchNumber}/{timestamp}, timestamp is not finished
@@ -80,9 +76,6 @@ async function submitData() {
             `${"pitScouting"}/${teamnum?.toString()}`,
             data,
         );
-
-        console.log(val);
-
 
         if (!val) {
             setSent(true);
