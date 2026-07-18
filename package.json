@@ -1,6 +1,7 @@
 {
   "type": "module",
   "dependencies": {
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
@@ -12,5 +13,8 @@
     "dev": "NODE_ENV=development nodemon ./backend/server.js",
     "start": "NODE_ENV=production node ./backend/server.js",
     "test:backend": "node --test backend/test/*.test.js"
+  },
+  "devDependencies": {
+    "supertest": "^7.2.2"
   }
 }

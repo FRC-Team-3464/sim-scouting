@@ -2,12 +2,17 @@ import express from "express";
 import cors from "cors";
 import { loadConfiguration } from "./config.js";
 import { initializeFirebase } from "./firebase.js";
+import { createAuthenticationRouter } from "./routes/auth.js";
 
 const configuration = loadConfiguration();
 const { auth, db } = initializeFirebase(configuration.serviceAccountKey);
 
 const app = express();
 const router = express.Router();
+const authenticationRouter = createAuthenticationRouter({
+    auth,
+    configuration,
+});
 const PORT = configuration.port;
 const corsAllowedOrigin = configuration.corsAllowedOrigin;
 
@@ -172,6 +177,7 @@ router.post("/register", async (req, res) => {
     }
 });
 
+app.use("/api/auth", authenticationRouter);
 app.use("/api", router); // floyd
 
 app.listen(PORT, () => {

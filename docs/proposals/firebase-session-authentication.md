@@ -319,6 +319,10 @@ Responses:
 - `429`: registration rate limit exceeded;
 - `500`: unexpected Firebase or server failure.
 
+`name`, `email`, and `password` must be non-empty strings. Node trims the name and email but never trims or otherwise changes the password. Firebase remains responsible for email-format and password-strength validation.
+
+If user creation succeeds but automatic sign-in or session creation fails, retain the new Firebase user and return a safe `500` response instructing the user to log in. Do not delete the account as compensation for the partial failure.
+
 ### `POST /api/auth/login`
 
 Request:
@@ -337,6 +341,10 @@ Responses:
 - `401`: invalid credentials or disabled user;
 - `429`: login rate limit exceeded;
 - `500`: unexpected Firebase or server failure.
+
+`email` and `password` must be non-empty strings. Node trims the email but never trims or otherwise changes the password.
+
+Successful registration and login responses use the same complete session representation documented for `GET /api/auth/session`. This gives React one stable user, debug-claim, expiration, and warning model across authentication operations.
 
 ### `POST /api/auth/logout`
 
@@ -884,10 +892,15 @@ The legacy authentication endpoints remain available only until the replacement 
 - Implement `POST /api/auth/login`.
 - Implement `POST /api/auth/logout`.
 - Implement `GET /api/auth/session` with verified identity, debug status, expiration, and warning timestamps.
+- Require non-empty name, email, and password values for registration and non-empty email and password values for login. Trim names and emails, but preserve passwords exactly.
+- Return the same verified session representation from successful registration, login, and current-session requests.
+- Retain a newly created Firebase user if automatic sign-in or session creation fails, and return a safe instruction to log in.
+- Add `cookie-parser` for standard request-cookie handling and `supertest` as a development-only HTTP integration-test dependency.
+- Add minimal structured authentication logs containing only route, status, safe category, and UID when available. Do not add custom request IDs in this chunk.
 - Mount the auth router from `server.js`.
 - Add integration tests for successful and failed registration, login, session inspection, logout, expiration, disabled users, and revoked sessions.
 
-**Out of scope:** Removing `/api/register` or `/api/login`, changing the React application, and protecting `/read` or `/write`.
+**Out of scope:** Removing `/api/register` or `/api/login`, changing the React application, protecting `/read` or `/write`, CSRF protection, and password reset. Password reset requires a separately reviewed implementation chunk.
 
 **Exit criteria:**
 
@@ -1051,10 +1064,13 @@ The change is complete when:
 5. **Session duration:** Configure session duration and warning intervals in minutes. Start with a six-hour (`360` minute) absolute Firebase session and a `30` minute warning, and support in-place reauthentication so active scouting data is preserved.
 6. **Revocation checking:** Call `verifySessionCookie(sessionCookie, true)` on every protected request initially and measure the operational cost before optimizing.
 7. **Debug authorization:** Use a Firebase `debug` custom claim, assigned through a restricted backend script and enforced by Node.
+8. **Password reset:** Add password reset in a separately reviewed implementation chunk rather than expanding the parallel session API work.
 
 ## 21. Open decisions
 
-No authentication-policy decisions remain open. Implementation details discovered during development must be added here if they require a product, security, or deployment choice rather than being resolved silently in code.
+- **Password-reset experience:** Decide whether reset links use Firebase's hosted reset page or a custom React page, then define the backend endpoint, generic anti-enumeration response, email template, authorized domains, rate limiting, and frontend behavior before implementation.
+
+Other implementation details discovered during development must be added here if they require a product, security, or deployment choice rather than being resolved silently in code.
 
 ## 22. References
 
