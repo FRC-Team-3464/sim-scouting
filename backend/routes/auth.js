@@ -4,7 +4,7 @@
  * These routes run alongside the legacy authentication endpoints until the
  * React migration is complete. They exchange passwords for Firebase ID tokens,
  * convert those tokens to HttpOnly session cookies, and never return Firebase
- * tokens to the browser. CSRF protection is added in Chunk 4 before React uses
+ * tokens to the browser. CSRF protection is added in Chunk 5 before React uses
  * these state-changing routes.
  */
 
@@ -140,7 +140,7 @@ function logAuthenticationEvent(logger, level, event) {
  * debug routes must independently enforce the verified claim on the server.
  * Missing or malformed debug claims always default to `false`.
  *
- * @param {import("firebase-admin").auth.DecodedIdToken} decodedClaims Verified claims.
+ * @param {import("firebase-admin/auth").DecodedIdToken} decodedClaims Verified claims.
  * @param {{sessionExpirationWarningMinutes: number}} configuration Session configuration.
  * @returns {{
  *   user: {uid: string, email: string, name: string, debug: boolean},
@@ -170,7 +170,7 @@ function createSessionResponse(decodedClaims, configuration) {
  * used by every successful authentication response. Revocation checking is
  * enabled by the shared session service.
  *
- * @param {import("firebase-admin").auth.Auth} auth Firebase Admin Auth service.
+ * @param {import("firebase-admin/auth").Auth} auth Firebase Admin Auth service.
  * @param {string} idToken Firebase ID token returned by REST authentication.
  * @param {{
  *   sessionDurationMinutes: number,
@@ -234,7 +234,7 @@ function getRegistrationErrorResponse(error) {
  * project or exposing test credentials.
  *
  * @param {{
- *   auth: import("firebase-admin").auth.Auth,
+ *   auth: import("firebase-admin/auth").Auth,
  *   configuration: {
  *     firebaseWebApiKey: string,
  *     sessionDurationMinutes: number,

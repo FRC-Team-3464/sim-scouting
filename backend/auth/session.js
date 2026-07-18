@@ -17,7 +17,7 @@ const MILLISECONDS_PER_SECOND = 1000;
  * The configured duration is converted from operator-friendly minutes to the
  * milliseconds required by Firebase Admin only at this API boundary.
  *
- * @param {import("firebase-admin").auth.Auth} auth Firebase Admin Auth service.
+ * @param {import("firebase-admin/auth").Auth} auth Firebase Admin Auth service.
  * @param {string} idToken Short-lived Firebase ID token from REST sign-in.
  * @param {number} sessionDurationMinutes Absolute session lifetime in minutes.
  * @returns {Promise<string>} Firebase session-cookie value.
@@ -42,9 +42,9 @@ export async function createSessionCookie(
  * Revocation checking is always enabled so disabled users, deleted users, and
  * explicitly revoked sessions cannot continue accessing protected operations.
  *
- * @param {import("firebase-admin").auth.Auth} auth Firebase Admin Auth service.
+ * @param {import("firebase-admin/auth").Auth} auth Firebase Admin Auth service.
  * @param {string} sessionCookie Firebase session-cookie value.
- * @returns {Promise<import("firebase-admin").auth.DecodedIdToken>} Verified claims.
+ * @returns {Promise<import("firebase-admin/auth").DecodedIdToken>} Verified claims.
  * @throws {Error} When the cookie is invalid, expired, revoked, or disabled.
  */
 export async function verifySessionCookie(auth, sessionCookie) {

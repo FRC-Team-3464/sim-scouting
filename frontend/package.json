@@ -12,11 +12,9 @@
   "dependencies": {
     "@microlink/react-json-view": "^1.27.1",
     "@tailwindcss/vite": "^4.1.17",
-    "dotenv": "^17.2.3",
-    "firebase": "^12.6.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.9.6",
+    "react-router-dom": "^7.18.1",
     "tailwindcss": "^4.1.17"
   },
   "devDependencies": {
@@ -31,6 +29,6 @@
     "globals": "^16.5.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "^7.2.4"
+    "vite": "^7.3.6"
   }
 }

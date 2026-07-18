@@ -911,7 +911,39 @@ The legacy authentication endpoints remain available only until the replacement 
 
 **Suggested commit:** `feat(auth): add backend-managed session routes`
 
-### Chunk 4: CSRF protection
+### Chunk 4: dependency security remediation
+
+**Goal:** Remediate known dependency vulnerabilities before expanding the authentication surface or connecting the new session API to React.
+
+**Scope:**
+
+- Audit the root/backend and frontend dependency trees independently, including production-only dependencies.
+- Remove direct dependencies that are verified as unused, including the Firebase client SDK where repository-wide source inspection confirms that neither application imports it.
+- Apply compatible security updates without using `npm audit fix --force` or accepting an unreviewed major-version upgrade.
+- Update vulnerable direct dependencies within their existing compatible version ranges and refresh vulnerable transitive dependencies in both lockfiles.
+- Re-run the audits after each dependency group so that the effect of each change remains reviewable.
+- If a remaining advisory requires a major Firebase Admin upgrade, review its official migration guidance and complete that upgrade as a separate, explicitly reviewed step within this chunk.
+- Record any advisory that cannot be safely resolved, including the affected runtime path, application exposure, and follow-up decision.
+
+**Out of scope:** Authentication behavior changes, CSRF implementation, and unrelated major framework or tooling upgrades that are not required to remediate a vulnerability.
+
+**Recorded remediation decisions:**
+
+- Frontend lint cleanup remains separate from this authentication proposal. The 40-error and 3-warning snapshot is maintained in the [frontend lint baseline](../technical-debt/frontend-lint-baseline.md). Chunk 4 requires dependency changes not to introduce additional lint failures, but it does not expand into unrelated application-source cleanup.
+- After removing the unused frontend Firebase client SDK and `dotenv`, updating React Router and Vite within their existing major versions, and applying compatible non-forced fixes, both frontend audits report zero vulnerabilities. The production build passes and the pre-existing lint baseline remains unchanged at 40 errors and 3 warnings.
+- The backend uses Firebase Admin 14.2 on Node.js 22. The Firebase initializer uses the supported modular `firebase-admin/app`, `firebase-admin/auth`, and `firebase-admin/firestore` entry points because Firebase Admin 14 removed the legacy namespace API.
+- After the Firebase Admin 14.2 migration and all compatible non-forced fixes, the root full and production audits contain no critical or high-severity findings. Six moderate findings remain through `uuid@9.0.1`, reached transitively only through Firebase Admin's `@google-cloud/storage@7.21.0` dependency. Version 7.21.0 is the latest available Storage package and still requires the affected dependency versions. npm offers only a forced Firebase Admin downgrade rather than a supported fix, so no override or forced change is applied. Recheck this documented exception when Google publishes a compatible Storage update.
+
+**Exit criteria:**
+
+- Root/backend and frontend audits report no unresolved critical or high-severity vulnerability for which a compatible fix is available.
+- Any unavoidable remaining advisory has a documented risk decision and follow-up action.
+- Backend tests, the frontend production build, and the existing API smoke checks pass. The separate pre-existing frontend lint baseline is recorded without requiring unrelated source cleanup in this chunk.
+- Registration, login, session inspection, logout, and all legacy behavior introduced or preserved by Chunks 1 through 3 remain unchanged.
+
+**Suggested commit:** `chore(deps): remediate dependency vulnerabilities`
+
+### Chunk 5: CSRF protection
 
 **Goal:** Protect cookie-authenticated state changes before the frontend begins using the session API.
 
@@ -934,7 +966,7 @@ The legacy authentication endpoints remain available only until the replacement 
 
 **Suggested commit:** `feat(security): add CSRF protection for session authentication`
 
-### Chunk 5: migrate the React authentication flow
+### Chunk 6: migrate the React authentication flow
 
 **Goal:** Make React use only the new Node authentication API.
 
@@ -959,7 +991,7 @@ The legacy authentication endpoints remain available only until the replacement 
 
 **Suggested commit:** `feat(auth): migrate frontend to backend sessions`
 
-### Chunk 6: protect data and debug operations
+### Chunk 7: protect data and debug operations
 
 **Goal:** Make the verified backend session the authorization boundary for application data.
 
@@ -984,7 +1016,7 @@ The legacy authentication endpoints remain available only until the replacement 
 
 **Suggested commit:** `feat(security): protect scouting and debug operations`
 
-### Chunk 7: production routing and abuse protection
+### Chunk 8: production routing and abuse protection
 
 **Goal:** Validate the selected same-origin design on Vercel Hobby.
 
@@ -1007,7 +1039,7 @@ The legacy authentication endpoints remain available only until the replacement 
 
 **Suggested commit:** `chore(deploy): configure same-origin session deployment`
 
-### Chunk 8: remove the legacy authentication design
+### Chunk 9: remove the legacy authentication design
 
 **Goal:** Remove the obsolete password-hash implementation only after the replacement is proven end to end.
 

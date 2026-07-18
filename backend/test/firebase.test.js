@@ -7,8 +7,8 @@ import { initializeFirebase } from "../firebase.js";
  * Creates the smallest Firebase Admin test double needed by the initializer.
  * No real credentials, network calls, or Firebase projects are involved.
  *
- * @returns {{firebaseAdmin: object, calls: {cert: number, initializeApp: number}}}
- * Test SDK and observable initialization counts.
+ * @returns {{sdk: object, calls: {cert: number, initializeApp: number}}}
+ * Test SDK functions and observable initialization counts.
  */
 function createFirebaseAdminTestDouble() {
     const calls = {
@@ -17,32 +17,33 @@ function createFirebaseAdminTestDouble() {
     };
     const authService = { name: "authentication-test-service" };
     const firestoreService = { name: "firestore-test-service" };
-    const firebaseAdmin = {
-        apps: [],
-        credential: {
-            cert(serviceAccount) {
-                calls.cert += 1;
-                return { serviceAccount };
-            },
+    const apps = [];
+    const sdk = {
+        cert(serviceAccount) {
+            calls.cert += 1;
+            return { serviceAccount };
+        },
+        getApps() {
+            return apps;
         },
         initializeApp(options) {
             calls.initializeApp += 1;
-            this.apps.push({ options });
+            apps.push({ options });
         },
-        auth() {
+        getAuth() {
             return authService;
         },
-        firestore() {
+        getFirestore() {
             return firestoreService;
         },
     };
 
-    return { firebaseAdmin, calls, authService, firestoreService };
+    return { sdk, calls, authService, firestoreService };
 }
 
 test("initializeFirebase initializes the Admin SDK only once", () => {
     const {
-        firebaseAdmin,
+        sdk,
         calls,
         authService,
         firestoreService,
@@ -53,11 +54,11 @@ test("initializeFirebase initializes the Admin SDK only once", () => {
 
     const firstServices = initializeFirebase(
         serviceAccountKey,
-        firebaseAdmin,
+        sdk,
     );
     const secondServices = initializeFirebase(
         serviceAccountKey,
-        firebaseAdmin,
+        sdk,
     );
 
     assert.equal(calls.cert, 1);
@@ -69,10 +70,10 @@ test("initializeFirebase initializes the Admin SDK only once", () => {
 });
 
 test("initializeFirebase rejects malformed service-account JSON", () => {
-    const { firebaseAdmin } = createFirebaseAdminTestDouble();
+    const { sdk } = createFirebaseAdminTestDouble();
 
     assert.throws(
-        () => initializeFirebase("not-json", firebaseAdmin),
+        () => initializeFirebase("not-json", sdk),
         SyntaxError,
     );
 });
