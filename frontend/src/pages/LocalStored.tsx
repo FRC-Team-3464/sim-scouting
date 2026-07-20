@@ -5,6 +5,7 @@ import ReactJsonView from "@microlink/react-json-view";
 import seedDataBase from "../scripts/seed";
 import IntegerInput from "../components/IntegerInput";
 import { useAuthentication } from "../auth/use-authentication";
+import { APP_ROUTES } from "../routes";
 
 interface ActionComponentProps {
     onSubmit: () => void;
@@ -19,7 +20,7 @@ const ActionComponent: React.FC<ActionComponentProps> = ({
 }) => {
     const navigate = useNavigate();
     const goBack = () => {
-        navigate("/");
+        navigate(APP_ROUTES.home);
     };
 
     return (
@@ -65,7 +66,7 @@ const LocalStorageView: React.FC = () => {
     const { user } = useAuthentication();
     const debug = user?.debug === true;
     const goBack = () => {
-        navigate("/");
+        navigate(APP_ROUTES.home);
     };
 
     const [seedNumber, setSeedNumber] = useState(1);

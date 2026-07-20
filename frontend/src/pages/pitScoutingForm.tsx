@@ -6,17 +6,20 @@ import { writeToDb } from "../api/scouting";
 import Dropdown from "../components/Dropdown";
 import BinaryChoice from "../components/BinaryChoice";
 import { useAuthentication } from "../auth/use-authentication";
+import { APP_ROUTES } from "../routes";
 
+type SubmissionStatus = "idle" | "submitting" | "failed";
 
 const PitScoutingForm: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuthentication();
     const debug = user?.debug === true;
     const goBack = () => {
-        navigate("/");
+        navigate(APP_ROUTES.home);
     };
 
-const [sent, setSent] = useState<boolean>(true);
+const [submissionStatus, setSubmissionStatus] =
+    useState<SubmissionStatus>("idle");
 
 /*Setup values*/
 const [scoutingTeam, setScoutingTeam] = useState(0);
@@ -38,7 +41,7 @@ const events = ["NE District Minuteman Event", "NE District URI Event"];
 
 async function submitData() {
     //make sure certain fields are filled out
-    let check: boolean =
+    const check: boolean =
         eventName !== "" && teamnum !== null && matchNumber !== null;
 
     const data = {
@@ -71,25 +74,26 @@ async function submitData() {
             JSON.stringify(data),
         );
 
-        setSent(false);
-        let val = await writeToDb(
-            `${"pitScouting"}/${teamnum?.toString()}`,
-            data,
-        );
+        setSubmissionStatus("submitting");
 
-        if (!val) {
-            setSent(true);
-        } else {
-            setSent(false);
+        try {
+            const uploaded = await writeToDb(
+                `${"pitScouting"}/${teamnum?.toString()}`,
+                data,
+            );
+
+            if (uploaded) {
+                // The local copy remains available as a recovery record even
+                // after the confirmed Firestore write succeeds.
+                navigate(APP_ROUTES.home, { replace: true });
+                return;
+            }
+        } catch {
+            // readDoc logs safe API details when the preliminary team-index
+            // lookup fails. The form stays mounted so the scout can retry.
         }
 
-       setSent(false);
-
-        const pathname = window.location.pathname;
-
-        if (pathname === "/pitscouting") {
-            goBack();
-        }
+        setSubmissionStatus("failed");
     }
 }
 
@@ -171,21 +175,23 @@ async function submitData() {
                 value={outpost}
                 onChange={setOutpost}        
             />  
-            <button className={buttonStyle} onClick={submitData}>
-                Submit
+            <button
+                className={buttonStyle}
+                onClick={submitData}
+                disabled={submissionStatus === "submitting"}
+            >
+                {submissionStatus === "submitting"
+                    ? "Submitting..."
+                    : "Submit"}
             </button>
-            {!sent ? (
+            {submissionStatus === "failed" ? (
                     <div className="flex flex-col items-center space-y-2 ">
-                        <h3 className="font-semibold text-red-800 text-2xl pb-1">
-                            If you are seeing this message, you either have poor
-                            connectivity, or you have encountered an error. If
-                            you encountered an error, a message should have
-                            shown up stating you had an error. If no message
-                            showed up, then you're connectivity is poor. If your
-                            data gets sent, then this page will automatically
-                            close. If you need to fill out another form, you may
-                            press the back button, but remember to submit later
-                            in the "view local storage" page.
+                        <h3
+                            role="alert"
+                            className="font-semibold text-red-800 text-2xl pb-1"
+                        >
+                            Upload failed. Your scouting data is saved on this
+                            device and can be retried from Local Data.
                         </h3>
                         <button className={buttonStyle} onClick={goBack}>
                             Back

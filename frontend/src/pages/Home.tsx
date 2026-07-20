@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useAuthentication } from "../auth/use-authentication";
+import { APP_ROUTES } from "../routes";
 
 const Home: React.FC = () => {
     const navigate = useNavigate();
@@ -25,7 +26,7 @@ const Home: React.FC = () => {
 
         try {
             await logout();
-            navigate("/login", { replace: true });
+            navigate(APP_ROUTES.login, { replace: true });
         } catch (error) {
             setLogoutError(
                 error instanceof Error
@@ -58,21 +59,21 @@ const Home: React.FC = () => {
             <button
                 type="button"
                 className="bg-sky-600 font-medium text-white text-3xl px-4 py-3 rounded-2xl hover:bg-sky-700 transition-colors"
-                onClick={() => void openScoutingForm("/match")}
+                onClick={() => void openScoutingForm(APP_ROUTES.match)}
             >
                 Scout!
             </button>
             <button
                 type="button"
                 className="bg-green-600 font-medium text-white text-3xl px-4 py-3 rounded-2xl hover:bg-green-700 transition-colors"
-                onClick={() => navigate("/stored")}
+                onClick={() => navigate(APP_ROUTES.localData)}
             >
                 View Local Data
             </button>
             <button
                 type="button"
                 className="bg-rose-600 font-medium text-white text-3xl px-4 py-3 rounded-2xl hover:bg-rose-700 transition-colors"
-                onClick={() => void openScoutingForm("/pitScouting")}
+                onClick={() => void openScoutingForm(APP_ROUTES.pit)}
             >
                 Pit scouting
             </button>

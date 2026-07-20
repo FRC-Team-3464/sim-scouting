@@ -118,8 +118,9 @@ corresponding project after adding or changing a value.
 
 Complete these checks at the staging origin before promoting a release:
 
-1. Load `/`, `/login`, `/signup`, `/match`, `/stored`, and `/pitScouting`
-   directly to verify the SPA fallback.
+1. Load `/`, `/login`, `/signup`, `/match`, `/local-data`, and `/pit`
+   directly to verify the SPA fallback. Confirm `/stored` redirects to
+   `/local-data` and `/pitScouting` redirects to `/pit`.
 2. Register a disposable development Firebase user.
 3. Log out and log back in.
 4. Reload the page and verify session restoration.

@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { useAuthentication } from "./use-authentication";
+import { APP_ROUTES } from "../routes";
 
 /**
  * Prevents protected pages from rendering until Node confirms authentication.
@@ -37,7 +38,7 @@ export function ProtectedRoute() {
     if (status === "anonymous") {
         return (
             <Navigate
-                to="/login"
+                to={APP_ROUTES.login}
                 replace
                 state={{ returnTo: location.pathname }}
             />
@@ -46,4 +47,3 @@ export function ProtectedRoute() {
 
     return <Outlet />;
 }
-

@@ -19,6 +19,37 @@ npm run lint
 
 The recorded environment uses Node.js 22, ESLint 9.39.1, and `typescript-eslint` 8.48.1. Line numbers are a snapshot and may move as source files change; the ESLint rule and affected code should be treated as the durable identifiers.
 
+## Routing and submission update
+
+The lowercase browser-route migration and scouting submission-state repair
+removed the obsolete `sent` state and converted the two touched validation
+variables to constants. No lint finding was added by the canonical route map,
+legacy redirects, clearer failure UI, or new tests.
+
+Current result:
+
+| Measurement | Count |
+|---|---:|
+| Files with findings | 4 |
+| Errors | 17 |
+| Warnings | 0 |
+| Total findings | 17 |
+| Automatically fixable errors reported by ESLint | 6 |
+
+Current findings by rule:
+
+| Severity | Rule | Count |
+|---|---|---:|
+| Error | `prefer-const` | 6 |
+| Error | `@typescript-eslint/no-unused-vars` | 8 |
+| Error | `@typescript-eslint/no-explicit-any` | 1 |
+| Error | `react-hooks/immutability` | 1 |
+| Error | `@typescript-eslint/no-unused-expressions` | 1 |
+
+The remaining findings are limited to `CheckboxDropdown.tsx`,
+`LocalStored.tsx`, `MatchForm.tsx`, and `seed.tsx`. Their remediation remains
+separate technical debt.
+
 ## Chunk 7 update
 
 Chunk 7 retains the unreliable synthetic scouting generator for possible future
@@ -26,7 +57,7 @@ redesign. Its four existing findings therefore remain in the baseline. No new
 lint finding was introduced by protected data routes or server-derived scouting
 attribution.
 
-Current result:
+Result at the end of Chunk 7:
 
 | Measurement | Count |
 |---|---:|
@@ -46,9 +77,9 @@ Current findings by rule:
 | Error | `react-hooks/immutability` | 1 |
 | Error | `@typescript-eslint/no-unused-expressions` | 1 |
 
-The remaining findings are limited to `CheckboxDropdown.tsx`,
+At the end of Chunk 7, the findings were limited to `CheckboxDropdown.tsx`,
 `LocalStored.tsx`, `MatchForm.tsx`, `pitScoutingForm.tsx`, and `seed.tsx`. Their
-remediation remains separate technical debt.
+later reduction is recorded in the current update above.
 
 ## Chunk 6 update
 
@@ -76,8 +107,8 @@ Current findings by rule:
 
 At the end of Chunk 6, the remaining findings were limited to
 `CheckboxDropdown.tsx`, `LocalStored.tsx`, `MatchForm.tsx`,
-`pitScoutingForm.tsx`, and `seed.tsx`. The table above remains the current
-Chunk 7 baseline because the seed feature was retained.
+`pitScoutingForm.tsx`, and `seed.tsx`. The seed feature remained retained in
+Chunk 7; later changes are recorded separately above.
 
 ## Original Chunk 4 snapshot
 

@@ -869,7 +869,7 @@ Firebase Authentication and Firestore emulators should be used where practical t
 - Firestore stores `scoutUid`, `scoutName`, and `submittedAt` from the verified session and does not store a browser-supplied identity;
 - `datas/data` retains only the shared team index fields rather than scout attribution;
 - granting or removing `debug` with the restricted script revokes the old session and requires a new login;
-- `/api/debug` is unavailable, while the retained seed control appears on `/stored` only after a session with the verified `debug: true` claim is established;
+- `/api/debug` is unavailable, while the retained seed control appears on `/local-data` only after a session with the verified `debug: true` claim is established;
 - logout invalidates the local browser session;
 - offline scouting records remain available after authentication changes.
 
@@ -1052,7 +1052,7 @@ The legacy authentication endpoints remain available only until the replacement 
 
 **Recorded implementation decisions:**
 
-- Protect `/`, `/match`, `/stored`, and `/pitScouting`; keep only `/login` and `/signup` public.
+- Protect `/`, `/match`, `/local-data`, and `/pit`; keep only `/login` and `/signup` public. Centralize these lowercase browser paths and retain redirects from `/stored` and `/pitScouting`.
 - Show a non-blocking warning banner at `sessionExpirationWarningAt` and offer immediate reauthentication.
 - At expiration, open a non-dismissible reauthentication modal over the current page so an active form remains mounted.
 - Require warning-time reauthentication before starting either a new Match or Pit scouting form, including direct URL navigation.

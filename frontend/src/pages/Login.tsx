@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAuthentication } from "../auth/use-authentication";
+import { APP_ROUTES } from "../routes";
 
 interface LoginLocationState {
     returnTo?: string;
@@ -16,7 +17,8 @@ const LoginPage: React.FC = () => {
     const [isSubmitting, setSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const returnTo =
-        (location.state as LoginLocationState | null)?.returnTo || "/";
+        (location.state as LoginLocationState | null)?.returnTo ||
+        APP_ROUTES.home;
 
     useEffect(() => {
         if (status === "authenticated") {
@@ -52,7 +54,7 @@ const LoginPage: React.FC = () => {
             <button
                 type="button"
                 className={buttonStyle}
-                onClick={() => navigate("/")}
+                onClick={() => navigate(APP_ROUTES.home)}
             >
                 Back
             </button>
@@ -110,7 +112,7 @@ const LoginPage: React.FC = () => {
             <button
                 type="button"
                 className="text-blue-400 hover:text-blue-300 text-sm pt-2"
-                onClick={() => navigate("/signup")}
+                onClick={() => navigate(APP_ROUTES.signup)}
             >
                 No account? Sign up
             </button>

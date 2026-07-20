@@ -151,6 +151,12 @@ describe("AuthenticationProvider", () => {
                 <DraftHarness />
             </AuthenticationProvider>,
         );
+
+        // Let the immediately resolved startup-session request finish before
+        // simulating draft input. Otherwise the test races React's provider
+        // state update and can type into a render that is still being settled.
+        await act(async () => Promise.resolve());
+
         const draftInput = screen.getByRole("textbox", {
             name: "Draft notes",
         });
@@ -212,4 +218,3 @@ describe("AuthenticationProvider", () => {
         expect(screen.getByText("Active form")).toBeInTheDocument();
     });
 });
-

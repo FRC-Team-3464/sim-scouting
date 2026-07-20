@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useAuthentication } from "../auth/use-authentication";
+import { APP_ROUTES } from "../routes";
 
 const SignupPage: React.FC = () => {
     const navigate = useNavigate();
@@ -15,7 +16,7 @@ const SignupPage: React.FC = () => {
 
     useEffect(() => {
         if (status === "authenticated") {
-            navigate("/", { replace: true });
+            navigate(APP_ROUTES.home, { replace: true });
         }
     }, [navigate, status]);
 
@@ -38,7 +39,7 @@ const SignupPage: React.FC = () => {
 
         try {
             await register(name, email, password);
-            navigate("/", { replace: true });
+            navigate(APP_ROUTES.home, { replace: true });
         } catch (error) {
             setErrorMessage(
                 error instanceof Error
@@ -60,7 +61,7 @@ const SignupPage: React.FC = () => {
             <button
                 type="button"
                 className={buttonStyle}
-                onClick={() => navigate("/")}
+                onClick={() => navigate(APP_ROUTES.home)}
             >
                 Back
             </button>
@@ -137,7 +138,7 @@ const SignupPage: React.FC = () => {
             <button
                 type="button"
                 className="text-blue-400 hover:text-blue-300 text-sm pt-2"
-                onClick={() => navigate("/login")}
+                onClick={() => navigate(APP_ROUTES.login)}
             >
                 Already have an account? Log in
             </button>

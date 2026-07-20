@@ -120,20 +120,20 @@ sim-scouting/
 |---|---|---|
 | `/` | `Home` | Main navigation and debug indicator |
 | `/match` | `MatchForm` | Match scouting data entry |
-| `/stored` | `LocalStorageView` | Inspect, submit, and delete locally saved records |
+| `/local-data` | `LocalStorageView` | Inspect, submit, and delete locally saved records |
 | `/login` | `LoginPage` | Email/password login |
 | `/signup` | `SignupPage` | Account creation |
-| `/pitScouting` | `PitScoutingForm` | Pit scouting data entry |
+| `/pit` | `PitScoutingForm` | Pit scouting data entry |
 
 Vercel serves existing static assets and `/api/*` Functions first, then rewrites remaining application URLs to `index.html`. This allows direct navigation to React Router pages without hiding API routes.
 
-Route paths are case-insensitive by React Router's default matching behavior, which is relevant because `Home` navigates to `/pitscouting` while the declared route is `/pitScouting`.
+`frontend/src/routes.ts` is the single source for lowercase canonical browser paths. `/stored` redirects to `/local-data`, and `/pitScouting` redirects to `/pit`, preserving existing bookmarks while preventing new navigation code from repeating path strings. API endpoints and Firestore paths are intentionally separate contracts.
 
 ### 5.2 Session representation and route protection
 
 `AuthenticationProvider` calls `GET /api/auth/session` during startup and stores only the verified public response in React state. The state contains the Firebase UID, email, display name, verified `debug` claim, expiration timestamp, and configurable warning timestamp. React never reads the `HttpOnly` Firebase session cookie and no longer creates readable `user` or `uid` cookies.
 
-`ProtectedRoute` blocks `/`, `/match`, `/stored`, and `/pitScouting` while the startup request is pending. It redirects only after a confirmed `401`; network and server failures display a retryable session-check error rather than misclassifying the user as anonymous. `/login` and `/signup` remain public. A requested protected path is retained through login.
+`ProtectedRoute` blocks `/`, `/match`, `/local-data`, and `/pit` while the startup request is pending. It redirects only after a confirmed `401`; network and server failures display a retryable session-check error rather than misclassifying the user as anonymous. `/login` and `/signup` remain public. A requested protected path is retained through login.
 
 The top-level debug whitelist request and public UID-list endpoint have been removed. Home, the scouting forms, and the retained seed control use only the current user's `debug` boolean from Node's verified session response for display and client-side behavior. The seed tool still writes through generic `/api/write`; it is known-buggy legacy convenience code rather than a separate server-authorized operation. Any future privileged debug endpoint must enforce the custom claim on the server.
 
@@ -162,14 +162,14 @@ Validate selected fields
   -> read Firestore datas/data
   -> append team number to its team array if absent
   -> merge-write Firestore document {team}/{match}
-  -> navigate home after the request returns
+  -> navigate home only after the backend confirms the write
 ```
 
 The implementation comment describes an event/team/match/timestamp hierarchy, but the actual document path is only `{teamNumber}/{matchNumber}`. A second scout submitting the same team and match merges into and overwrites fields in the existing document rather than creating an independent observation.
 
 Validation requires a non-empty event, but the numeric inputs initialize to `0` and are checked against `null`; therefore team and match number `0` pass the submit check. In debug mode, validation is bypassed entirely.
 
-The local record remains after a successful upload. It is therefore a local history/queue, but there is no status flag distinguishing uploaded records from pending ones.
+The local record remains after a successful upload. A rejected or thrown upload keeps the form mounted and displays a retry message that directs the scout to Local Data. The submit button is disabled while the request is pending. Local records still have no durable status flag distinguishing uploaded records from pending ones.
 
 ### 5.4 Pit scouting workflow
 
@@ -184,7 +184,7 @@ The local record remains after a successful upload. It is therefore a local hist
 
 The local key uses the same `scoutData-{team}-{match}` pattern as match scouting, so pit and match records for the same team/match can overwrite one another locally. The Firestore path is `pitScouting/{teamNumber}`; repeat submissions merge and overwrite that team's existing pit document.
 
-The same numeric validation issue exists here. In addition, the page checks `window.location.pathname === "/pitscouting"` before navigating home; this differs in case from the declared route and can behave differently depending on the browser URL casing.
+The same numeric validation issue exists here. Submission uses the same explicit pending/failure behavior as match scouting and navigates to the canonical home route only after the backend confirms the write.
 
 ### 5.5 Offline/local-storage workflow
 
@@ -700,7 +700,6 @@ Prioritized issues are:
 6. **Weak validation:** numeric zero passes required checks; the backend accepts arbitrary field types.
 7. **No timestamps/schema versions:** records cannot be reliably ordered, migrated, or audited.
 8. **Top-level debug fetch:** an auxiliary request can block application startup.
-9. **Error-state inversion:** in the scouting forms, `sent` naming/rendering is inconsistent; the warning can be set or cleared contrary to the explanatory text.
 
 A safer record layout would be:
 
@@ -719,9 +718,9 @@ The backend uses Node's built-in test runner and Supertest. Run all backend test
 npm run test:backend
 ```
 
-The current suite contains 122 passing tests covering configuration validation, Firebase initialization, Firebase password REST handling, session creation and verification, authentication HTTP behavior, safe error mapping, signed CSRF token construction, origin/content-type rejection, cookie attributes, token rotation, logout cleanup, protected-route session rejection, identity-spoof prevention, safe debug-claim administration, and checked-in deployment configuration. Firebase services are replaced with test doubles, so the suite does not require a live Firebase project. Supertest HTTP integration tests bind a temporary localhost port.
+The current suite contains 123 passing tests covering configuration validation, Firebase initialization, Firebase password REST handling, session creation and verification, authentication HTTP behavior, safe error mapping, signed CSRF token construction, origin/content-type rejection, cookie attributes, token rotation, logout cleanup, protected-route session rejection, identity-spoof prevention, safe debug-claim administration, and checked-in deployment configuration. Firebase services are replaced with test doubles, so the suite does not require a live Firebase project. Supertest HTTP integration tests bind a temporary localhost port.
 
-The frontend uses Vitest, jsdom, and React Testing Library. Its 19 tests cover the centralized client, credential and CSRF behavior, retry limits, unchanged scouting-mutation replay after reauthentication, startup session restoration, protected routing, verified identity/debug state, login failures, registration validation and success, logout, warning/expiration behavior, direct form-route gating, and in-place reauthentication that preserves active React form state. Playwright is intentionally not added during this proposal; repeatable manual browser checks complement the backend and frontend automated suites and browser automation can be reconsidered after the planned React rewrite.
+The frontend uses Vitest, jsdom, and React Testing Library. Its 25 tests cover the centralized client, credential and CSRF behavior, retry limits, unchanged scouting-mutation replay after reauthentication, startup session restoration, protected routing, canonical and legacy browser paths, verified identity/debug state, login failures, registration validation and success, logout, warning/expiration behavior, direct form-route gating, successful and failed pit/match submissions, and in-place reauthentication that preserves active React form state. Playwright is intentionally not added during this proposal; repeatable manual browser checks complement the backend and frontend automated suites and browser automation can be reconsidered after the planned React rewrite.
 
 Recommended minimum coverage:
 
@@ -733,7 +732,7 @@ Recommended minimum coverage:
 - end-to-end login and scouting workflows;
 - deployment smoke tests for `/`, direct SPA routes, API health, and CORS.
 
-The production frontend build completes successfully. Removing obsolete authentication code reduced the separately documented lint debt from 40 errors and 3 warnings to 21 errors and no warnings. The retained seed generator accounts for four of those existing errors. The remaining findings are pre-existing issues outside this authentication chunk. Verify the current state with:
+The production frontend build completes successfully. Removing obsolete authentication code and correcting the scouting submission state reduced the separately documented lint debt from 40 errors and 3 warnings to 17 errors and no warnings. The retained seed generator accounts for four of those existing errors. The remaining findings are pre-existing issues outside this authentication chunk. Verify the current state with:
 
 ```bash
 npm --prefix frontend run build
@@ -814,6 +813,7 @@ Before a competition deployment:
 | `backend/scripts/set-debug-claim.js` | Restricted debug-claim grant/removal with session revocation |
 | `backend/test/*` | Backend unit and HTTP integration tests |
 | `frontend/src/App.tsx` | Route composition |
+| `frontend/src/routes.ts` | Canonical browser paths and retained legacy redirect paths |
 | `frontend/src/pages/Home.tsx` | Authentication redirect, navigation, debug flag |
 | `frontend/src/pages/MatchForm.tsx` | Match state, game rules, serialization, local/API submit |
 | `frontend/src/pages/pitScoutingForm.tsx` | Pit state, serialization, local/API submit |
