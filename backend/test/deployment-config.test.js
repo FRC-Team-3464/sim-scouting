@@ -21,7 +21,7 @@ function readRepositoryJson(relativePath) {
     );
 }
 
-test("both root-level Vercel projects share one tracked routing configuration", () => {
+test("Vercel preserves API functions before applying the React SPA fallback", () => {
     const vercelConfiguration = readRepositoryJson("vercel.json");
 
     assert.equal(
@@ -34,7 +34,10 @@ test("both root-level Vercel projects share one tracked routing configuration", 
     );
     assert.equal(vercelConfiguration.outputDirectory, "frontend/dist");
     assert.deepEqual(vercelConfiguration.rewrites, [
-        { source: "/(.*)", destination: "/index.html" },
+        {
+            source: "/((?!api(?:/|$)).*)",
+            destination: "/index.html",
+        },
     ]);
     assert.equal("headers" in vercelConfiguration, false);
     assert.equal(
