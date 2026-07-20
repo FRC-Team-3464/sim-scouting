@@ -13,8 +13,8 @@ same Git repository:
 Each project deploys the complete combined application. React and `/api/*`
 remain under the same origin in both environments. The repository-root
 `vercel.json` installs both dependency trees, builds `frontend/dist`, and
-provides the React SPA fallback. `api/[...path].js` exposes Express as the API
-function.
+routes `/api/*` to the concrete `api/index.js` Express Function before applying
+the React SPA fallback to browser routes.
 
 Generated Preview deployment origins are not trusted for authenticated
 mutations. Use the stable staging project for pre-production authentication

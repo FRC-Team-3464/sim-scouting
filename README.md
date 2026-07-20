@@ -64,8 +64,9 @@ The same repository is connected to two root-level Vercel projects. The
 `sim-city-scouting-staging` deploys the `staging` branch to
 `https://sim-city-scouting-staging.vercel.app`. Both projects use the root
 `vercel.json`, which installs both dependency trees, builds `frontend/dist`,
-and keeps React Router routes working. `api/[...path].js` exposes Express as one
-catch-all Vercel Function. React uses the relative API base `/api`, so cookies
+and keeps React Router routes working. An explicit `/api/:path*` rewrite sends
+API requests to the concrete `api/index.js` Express Function before the React
+SPA fallback is applied. React uses the relative API base `/api`, so cookies
 remain same-origin in both environments.
 
 Hosted staging shares the existing development Firebase project but uses a

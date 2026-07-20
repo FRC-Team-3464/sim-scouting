@@ -698,10 +698,10 @@ VITE_API_BASE_URL=/api
 The current combined repository will be connected to two root-level Vercel
 projects: `sim-city-scouting` deploys `main` to production, while
 `sim-city-scouting-staging` deploys the dedicated `staging` branch. Each project
-hosts both React and Node under its own same origin. `api/[...path].js` exports
-the Express application as one catch-all Vercel Function, while the shared root
-`vercel.json` builds `frontend/dist` and rewrites non-file application routes
-to React's `index.html`. Express construction lives in `backend/app.js`;
+hosts both React and Node under its own same origin. The shared root
+`vercel.json` builds `frontend/dist`, routes `/api/:path*` to the concrete
+`api/index.js` Express Function, and applies the React `index.html` fallback
+only to non-API paths. Express construction lives in `backend/app.js`;
 `backend/server.js` starts the local long-running listener without being
 imported by Vercel.
 
@@ -997,8 +997,8 @@ The legacy authentication endpoints remain available only until the replacement 
 
 - Frontend lint cleanup remains separate from this authentication proposal. The 40-error and 3-warning snapshot is maintained in the [frontend lint baseline](../technical-debt/frontend-lint-baseline.md). Chunk 4 requires dependency changes not to introduce additional lint failures, but it does not expand into unrelated application-source cleanup.
 - After removing the unused frontend Firebase client SDK and `dotenv`, updating React Router and Vite within their existing major versions, and applying compatible non-forced fixes, both frontend audits report zero vulnerabilities. The production build passes and the pre-existing lint baseline remains unchanged at 40 errors and 3 warnings.
-- The backend uses Firebase Admin 14.2 on Node.js 22. The Firebase initializer uses the supported modular `firebase-admin/app`, `firebase-admin/auth`, and `firebase-admin/firestore` entry points because Firebase Admin 14 removed the legacy namespace API.
-- After the Firebase Admin 14.2 migration and all compatible non-forced fixes, the root full and production audits contain no critical or high-severity findings. Six moderate findings remain through `uuid@9.0.1`, reached transitively only through Firebase Admin's `@google-cloud/storage@7.21.0` dependency. Version 7.21.0 is the latest available Storage package and still requires the affected dependency versions. npm offers only a forced Firebase Admin downgrade rather than a supported fix, so no override or forced change is applied. Recheck this documented exception when Google publishes a compatible Storage update.
+- The backend retains the modular `firebase-admin/app`, `firebase-admin/auth`, and `firebase-admin/firestore` APIs on Node.js 22. Staging deployment testing found that Firebase Admin 14.2 selects CommonJS `jwks-rsa` 4, which synchronously requires ESM-only `jose` 6; the Vercel Function loader terminates that combination with `ERR_REQUIRE_ESM`. Firebase Admin is therefore pinned temporarily to 13.6.0, whose `jwks-rsa` 3 and `jose` 4 dependency chain is CommonJS-compatible. Do not force an unsupported transitive JOSE override. Re-test and restore a current Firebase Admin release when Vercel or the upstream dependency resolves the loader incompatibility.
+- After compatible non-forced fixes, the root full and production audits contain no critical or high-severity findings. Eight affected dependency paths remain for one moderate `uuid@9.0.1` buffer-bounds advisory, reached transitively through Firebase Admin's Google Cloud Firestore and Storage dependencies. The application does not directly call the affected UUID v3, v5, or v6 APIs or supply their optional buffer argument. npm offers only forced breaking Firebase Admin changes: the production-only audit suggests 14.2, which is incompatible with the current Vercel Function loader, while the full audit suggests the obsolete 10.3 release. No override or forced change is applied. Recheck this documented exception when Vercel supports the current dependency chain or Google publishes compatible Cloud dependencies.
 
 **Exit criteria:**
 

@@ -44,11 +44,11 @@ The completed authentication work is traceable to the implementation chunks in [
 | 1 | Extracted environment validation and single Firebase Admin initialization into `backend/config.js` and `backend/firebase.js`, with initial backend tests | Repository structure, backend initialization, configuration, and testing sections |
 | 2 | Added Firebase password REST authentication, session-cookie services, revocation checking, cookie configuration, expiration/warning calculation, and their tests | Backend-managed API, required environment, session response, security status, and testing sections |
 | 3 | Added the parallel `/api/auth` router, cookie parsing, registration, login, logout, session inspection, safe structured logs, and HTTP integration tests while retaining the legacy flow | Backend API contract, initialization, frontend migration status, security assessment, and testing sections |
-| 4 | Removed unused dependencies, migrated to modular Firebase Admin 14.2, updated compatible packages, recorded the frontend lint baseline, and documented the six unavoidable moderate transitive findings | Technology stack, testing/quality status, and source index |
+| 4 | Removed unused dependencies, adopted the modular Firebase Admin API, updated compatible packages, recorded the frontend lint baseline, and documented unavoidable moderate transitive findings; deployment testing later required a temporary Firebase Admin 13.6 compatibility pin | Technology stack, testing/quality status, and source index |
 | 5 | Added signed, session-bound CSRF tokens, exact Origin and JSON checks, credentialed CORS, CSRF cookie rotation, safe rejection logs, configuration validation, and security tests | CORS, session API, CSRF model, required environment, operational checklist, and testing sections |
 | 6 | Migrated React to a centralized credentialed API client, verified authentication context, protected routes, configurable expiration warning, in-place reauthentication, bounded retry policy, and frontend tests | Frontend session model, API behavior, routing, draft preservation, security status, testing, and source index |
 | 7 | Protected generic data routes with verified sessions, added CSRF to writes, derived scouting attribution on the server, added restricted debug-claim administration, removed the public debug list, and retained the legacy seed tool for later redesign | Data API contract, attribution model, security assessment, testing, operations, and source index |
-| 8 (repository preparation) | Added shared root Vercel configuration for separate staging and production projects, an import-safe Express application, a catch-all API function, same-origin examples, deployment configuration tests, and a deployment guide; external project creation and smoke testing remain pending | Repository structure, initialization, CORS, production deployment, testing, operations, and source index |
+| 8 (repository preparation) | Added shared root Vercel configuration for separate staging and production projects, an import-safe Express application, a concrete API function with explicit routing, same-origin examples, deployment configuration tests, and a deployment guide; staging smoke testing remains in progress | Repository structure, initialization, CORS, production deployment, testing, operations, and source index |
 
 Chunk 9 legacy-removal work and Chunk 10 development-environment documentation are not described as current behavior. Chunk 8 is not complete until the external Vercel project is created and its production smoke checklist passes.
 
@@ -63,8 +63,8 @@ Chunk 9 legacy-removal work and Chunk 10 development-environment documentation a
 | JSON display | `@microlink/react-json-view` | Local scouting record preview |
 | API | Node.js, Express 5 | JSON endpoints under `/api` |
 | HTTP support | `cookie-parser`, Supertest | Request-cookie parsing and backend HTTP integration testing |
-| Data/auth administration | Firebase Admin 14 | Firestore reads/writes, Authentication user management, and session-cookie verification |
-| Hosting configuration | Vercel | Static Vite build, SPA fallback, and one catch-all Express Function |
+| Data/auth administration | Firebase Admin 13.6 (temporary Vercel compatibility pin) | Firestore reads/writes, Authentication user management, and session-cookie verification through the modular API |
+| Hosting configuration | Vercel | Static Vite build, SPA fallback, and one explicitly routed Express Function |
 
 The root project also declares `nodemon` for local backend reloads. CORS is implemented manually by Express; the unused `cors` package has been removed.
 
@@ -74,7 +74,7 @@ The root project also declares `nodemon` for local backend reloads. CORS is impl
 sim-scouting/
 ├── .env.development.example     Backend development configuration template
 ├── .env.production.example      Backend production configuration template
-├── api/[...path].js             Catch-all Vercel Function exporting Express
+├── api/index.js                 Concrete Vercel Function exporting Express
 ├── backend/
 │   ├── auth/                     Firebase REST sign-in and session helpers
 │   ├── data/scouting-record.js   Server-owned scouting attribution
@@ -234,12 +234,12 @@ The checkbox component's in-place mutation can prevent React from recognizing a 
 2. loads `.env.{environment}` using `dotenv`, with `.env` as an optional fallback;
 3. validates all backend and session environment variables in `backend/config.js`;
 4. parses `SERVICE_ACCOUNT_KEY` as JSON;
-5. initializes the modular Firebase Admin 14 services once in `backend/firebase.js`;
+5. initializes the modular Firebase Admin services once in `backend/firebase.js`;
 6. obtains Firebase Authentication and Firestore service instances;
 7. mounts the backend-managed session router at `/api/auth` and the legacy router at `/api`;
 8. exports the configured Express application without opening a network listener.
 
-`backend/server.js` imports that application and starts the configured local or traditional Node listener. Vercel imports the same application through `api/[...path].js`, so serverless initialization does not call `app.listen()`.
+`backend/server.js` imports that application and starts the configured local or traditional Node listener. Vercel imports the same application through `api/index.js`, so serverless initialization does not call `app.listen()`. The first root rewrite sends `/api/:path*` to that concrete Function; the SPA fallback explicitly excludes `/api` so React never shadows backend responses.
 
 `SERVICE_ACCOUNT_KEY` must contain the complete Firebase service-account JSON encoded as one environment-variable value. Startup also requires a valid port, exact HTTP(S) frontend origin, Firebase Web API key, session duration, warning duration, cookie settings, and CSRF signing secret. Missing or invalid configuration causes startup to fail before the server listens.
 
@@ -635,7 +635,7 @@ The default development configuration uses frontend origin `http://localhost:517
 
 ### 8.3 Production notes
 
-The repository is prepared for two Vercel projects, each rooted at the repository root and using the same tracked configuration. `sim-city-scouting` deploys `main` to production; `sim-city-scouting-staging` deploys the dedicated `staging` branch. The root `vercel.json` installs the root and frontend lockfiles independently, builds the Vite application, publishes `frontend/dist`, and applies the React SPA fallback. `api/[...path].js` exports `backend/app.js` as one catch-all Vercel Function so existing `/api/*` Express paths remain unchanged. The former `frontend/vercel.json` was removed because each deployment reads the root project configuration.
+The repository is prepared for two Vercel projects, each rooted at the repository root and using the same tracked configuration. `sim-city-scouting` deploys `main` to production; `sim-city-scouting-staging` ultimately deploys the dedicated `staging` branch. The root `vercel.json` installs the root and frontend lockfiles independently, builds the Vite application, publishes `frontend/dist`, rewrites `/api/:path*` to `api/index.js`, and applies the React SPA fallback only to non-API paths. The concrete Function exports `backend/app.js`, so existing `/api/*` Express paths remain unchanged. The former `frontend/vercel.json` was removed because each deployment reads the root project configuration.
 
 Production configuration uses `.env.production` locally or hosting-platform environment variables. `npm start` sets `NODE_ENV=production` and runs Node directly; `npm --prefix frontend run build` causes Vite to select `frontend/.env.production`.
 
@@ -648,7 +648,7 @@ API base:        https://sim-city-scouting.vercel.app/api
 
 The tracked production examples now use `CORS_ALLOWED_ORIGIN=https://sim-city-scouting.vercel.app` and `VITE_API_BASE_URL=/api`. Production session and CSRF cookies remain host-only, `Secure`, `SameSite=Lax`, and scoped to `/`, so they do not require cross-site-cookie exceptions.
 
-The Vercel projects have not yet been created. Repository tests validate the checked-in configuration, but the deployment is not complete until staging and production builds are deployed and their manual registration, login, session restoration, protected write, direct SPA navigation, and logout checks pass. Generated Vercel Preview origins are intentionally not trusted for authenticated mutations; the stable staging project is the pre-production authentication environment.
+The staging Vercel project has been created and temporarily deploys `feat/firebase-session-auth` while its configuration is validated. It must be switched to the protected `staging` branch after the feature is merged. Production setup and the deployment work are not complete until both environments pass their manual registration, login, session restoration, protected write, direct SPA navigation, and logout checks. Generated Vercel Preview origins are intentionally not trusted for authenticated mutations; the stable staging project is the pre-production authentication environment.
 
 Hosted staging uses `https://sim-city-scouting-staging.vercel.app` and the existing development Firebase project, so it intentionally shares local-development users and Firestore data. It uses a separate service-account key within that Firebase project and a staging-only CSRF secret. Production uses its separate Firebase project and credentials. The complete project-creation, variable, branch, and smoke-test procedure is in [`docs/deployment-setup.md`](docs/deployment-setup.md).
 
@@ -741,7 +741,9 @@ npm --prefix frontend run lint
 npm --prefix frontend run test
 ```
 
-The frontend dependency audit currently reports zero vulnerabilities. The root audit has six documented moderate findings in `uuid@9.0.1` reached transitively through Firebase Admin's Google Cloud Storage dependency. npm offers only a forced downgrade to Firebase Admin 10.3.0, so no unsupported forced fix is applied. There are no unresolved critical or high-severity audit findings.
+The frontend dependency audit currently reports zero vulnerabilities. The root full and production audits report eight affected dependency paths for one moderate `uuid@9.0.1` buffer-bounds advisory, reached transitively through Firebase Admin's Google Cloud Firestore and Storage dependencies. The application does not directly call the affected UUID v3, v5, or v6 APIs or provide their optional buffer argument. npm offers only forced breaking Firebase Admin changes: the production-only audit suggests 14.2, which is incompatible with the current Vercel Function loader, while the full audit suggests the obsolete 10.3 release. No transitive override or forced fix is applied. There are no unresolved critical or high-severity audit findings.
+
+Firebase Admin is temporarily pinned to 13.6.0 for Vercel compatibility. Firebase Admin 14.2 selects CommonJS `jwks-rsa` 4, which synchronously requires ESM-only `jose` 6. Local Node.js 22 supports that bridge, but the Vercel Function loader failed at startup with `ERR_REQUIRE_ESM`. Firebase Admin 13.6 selects `jwks-rsa` 3 and `jose` 4, a CommonJS-compatible combination, while retaining the modular Admin APIs used by this application. Re-test and restore a supported current Firebase Admin release when Vercel or the upstream dependency chain resolves this loader incompatibility.
 
 ## 12. Recommended improvement roadmap
 
@@ -802,7 +804,7 @@ Before a competition deployment:
 | `backend/firebase.js` | Modular Firebase Admin initialization |
 | `backend/app.js` | Express composition, CORS, Firestore access, authentication router, and retained legacy routes |
 | `backend/server.js` | Start the local or traditional long-running Node listener |
-| `api/[...path].js` | Export Express as the catch-all `/api/*` Vercel Function |
+| `api/index.js` | Export Express as the concrete Vercel Function targeted by the `/api/:path*` rewrite |
 | `backend/auth/firebase-auth-rest.js` | Firebase password authentication over the REST API |
 | `backend/auth/session.js` | Firebase session creation, verification, timing, and cookie options |
 | `backend/data/scouting-record.js` | Remove spoofed fields and add verified scout attribution and server time |

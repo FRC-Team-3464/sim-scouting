@@ -35,6 +35,10 @@ test("Vercel preserves API functions before applying the React SPA fallback", ()
     assert.equal(vercelConfiguration.outputDirectory, "frontend/dist");
     assert.deepEqual(vercelConfiguration.rewrites, [
         {
+            source: "/api/:path*",
+            destination: "/api/index",
+        },
+        {
             source: "/((?!api(?:/|$)).*)",
             destination: "/index.html",
         },
@@ -47,11 +51,12 @@ test("Vercel preserves API functions before applying the React SPA fallback", ()
     );
 });
 
-test("Vercel exposes the existing Express routes through one catch-all function", () => {
-    assert.equal(existsSync(`${repositoryRoot}api/[...path].js`), true);
+test("Vercel exposes Express through one concrete API function", () => {
+    assert.equal(existsSync(`${repositoryRoot}api/index.js`), true);
+    assert.equal(existsSync(`${repositoryRoot}api/[...path].js`), false);
 
     const functionSource = readFileSync(
-        `${repositoryRoot}api/[...path].js`,
+        `${repositoryRoot}api/index.js`,
         "utf8",
     );
 
@@ -91,4 +96,13 @@ test("the unused CORS package is not installed because Express owns API headers"
     const rootPackage = readRepositoryJson("package.json");
 
     assert.equal("cors" in rootPackage.dependencies, false);
+});
+
+test("Firebase Admin stays on the documented Vercel-compatible release", () => {
+    const rootPackage = readRepositoryJson("package.json");
+
+    // Firebase Admin 14 currently selects an ESM-only JOSE dependency through
+    // CommonJS jwks-rsa, which Vercel cannot load. Keep this exact pin until
+    // the documented deployment compatibility exception is revalidated.
+    assert.equal(rootPackage.dependencies["firebase-admin"], "13.6.0");
 });
