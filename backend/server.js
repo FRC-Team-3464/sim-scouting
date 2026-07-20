@@ -6,5 +6,5 @@ import app, { port } from "./app.js";
  * entry point imports backend/app.js and invokes Express per request.
  */
 app.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}`);
+    console.log(`Sim City Scouting API running on http://localhost:${port}`);
 });
