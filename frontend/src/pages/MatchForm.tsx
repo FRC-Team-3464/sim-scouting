@@ -1,4 +1,4 @@
-import React, { useEffect, useState, type JSX } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import BinaryChoice from "../components/BinaryChoice";
 import MultiCounterInput from "../components/MultiCounterInput";
@@ -6,22 +6,19 @@ import IntegerInput from "../components/IntegerInput";
 import Dropdown from "../components/Dropdown";
 import AutoResizeTextarea from "../components/AutoResizeTextArea";
 import CheckboxDropdown from "../components/CheckboxDropdown";
-import { writeToDb } from "../scripts/firebase";
-import { readCookie } from "../scripts/user";
-import { debug } from "./Home";
+import { writeToDb } from "../api/scouting";
+import { useAuthentication } from "../auth/use-authentication";
+import { APP_ROUTES } from "../routes";
+
+type SubmissionStatus = "idle" | "submitting" | "failed";
 
 const MatchForm: React.FC = () => {
     const navigate = useNavigate();
+    const { user } = useAuthentication();
+    const debug = user?.debug === true;
     const goBack = () => {
-        navigate("/");
+        navigate(APP_ROUTES.home);
     };
-
-    useEffect(() => {
-        // useEffect to run after component mounts
-        if (readCookie("user") == undefined) {
-            navigate("/login");
-        }
-    }, []); // empty dependency array so only runs once
     const [section, setSection] = useState<
         "setup" | "auto" | "teleop" | "endgame" | "errors"
     >("setup");
@@ -29,8 +26,8 @@ const MatchForm: React.FC = () => {
     type checkboxDropdownList = Record<string, boolean>;
 
     const [showCheckboxes, setShowCheckboxes] = useState<boolean>(false);
-    // this boolean is used to show a message if the data was not sent
-    const [sent, setSent] = useState<boolean>(true);
+    const [submissionStatus, setSubmissionStatus] =
+        useState<SubmissionStatus>("idle");
     // Setup values
     const [scoutingTeam, setScoutingTeam] = useState(0);
     const [eventName, setEventName] = useState<string>("");
@@ -173,12 +170,11 @@ const MatchForm: React.FC = () => {
 
     async function submitData() {
         //make sure certain fields are filled out
-        let check: boolean =
+        const check: boolean =
             eventName !== "" && teamNumber !== null && matchNumber !== null;
 
         const data = {
             scoutingTeam: scoutingTeam,
-            name: readCookie("user"),
             eventName: eventName,
             teamNumber: teamNumber,
             matchNumber: matchNumber,
@@ -223,7 +219,6 @@ const MatchForm: React.FC = () => {
             robotError: robotErrorsCheck,
         };
 
-        console.log(data);
         /*
         The path for block of data will be submitted as follows:
         /{eventName}/{teamNumber}/{matchNumber}/{timestamp}, timestamp is not finished
@@ -235,21 +230,26 @@ const MatchForm: React.FC = () => {
                 `scoutData-${teamNumber}-${matchNumber}`,
                 JSON.stringify(data),
             );
-            setSent(false);
-            let val = await writeToDb(
-                `${teamNumber?.toString()}/${matchNumber?.toString()}`,
-                data,
-            );
-            console.log(val);
-            if (!val) {
-                setSent(true);
-            } else {
-                setSent(false);
+            setSubmissionStatus("submitting");
+
+            try {
+                const uploaded = await writeToDb(
+                    `${teamNumber?.toString()}/${matchNumber?.toString()}`,
+                    data,
+                );
+
+                if (uploaded) {
+                    // Keep the local recovery copy and leave only after the
+                    // backend explicitly confirms the Firestore write.
+                    navigate(APP_ROUTES.home, { replace: true });
+                    return;
+                }
+            } catch {
+                // readDoc already records a safe category when the shared
+                // team-index lookup fails. Preserve this form for retry.
             }
-            const pathname = window.location.pathname;
-            if (pathname === "/match") {
-                goBack();
-            }
+
+            setSubmissionStatus("failed");
         }
     }
 
@@ -583,22 +583,23 @@ const MatchForm: React.FC = () => {
                         onChange={setNotes}
                         placeholder="Other notes about robot"
                     />
-                    <button className={buttonStyle} onClick={submitData}>
-                        Submit
+                    <button
+                        className={buttonStyle}
+                        onClick={submitData}
+                        disabled={submissionStatus === "submitting"}
+                    >
+                        {submissionStatus === "submitting"
+                            ? "Submitting..."
+                            : "Submit"}
                     </button>
-                    {!sent ? (
+                    {submissionStatus === "failed" ? (
                         <div className="flex flex-col items-center space-y-2 ">
-                            <h3 className="font-semibold text-red-800 text-2xl pb-1">
-                                If you are seeing this message, you either have
-                                poor connectivity, or you have encountered an
-                                error. If you encountered an error, a message
-                                should have shown up stating you had an error.
-                                If no message showed up, then you're
-                                connectivity is poor. If your data gets sent,
-                                then this page will automatically close. If you
-                                need to fill out another form, you may press the
-                                back button, but remember to submit later in the
-                                "view local storage" page.
+                            <h3
+                                role="alert"
+                                className="font-semibold text-red-800 text-2xl pb-1"
+                            >
+                                Upload failed. Your scouting data is saved on
+                                this device and can be retried from Local Data.
                             </h3>
                             <button className={buttonStyle} onClick={goBack}>
                                 Back

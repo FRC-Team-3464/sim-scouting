@@ -1,58 +1,47 @@
-import React, {useEffect} from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { readCookie, deleteCookie } from "../scripts/user";
-import { API_BASE_URL } from "../scripts/config";
 
-// Debug mode
-const de = async (): Promise<boolean> => {
-    const user = readCookie("uid");
-    const response = await fetch(`${API_BASE_URL}/debug`, {
-        method: "GET",
-    });
-    let rawWhiteList = await response.json();
-
-    let whiteList = rawWhiteList.value.split(",").map((s: string) => s.trim());
-    return whiteList.includes(user);
-};
-
-
-let debug = await de();
-
-export { debug };
-
-
-const signedIn = readCookie("user");
-
+import { useAuthentication } from "../auth/use-authentication";
+import { APP_ROUTES } from "../routes";
 
 const Home: React.FC = () => {
-
     const navigate = useNavigate();
+    const { user, logout, requireFreshSession } = useAuthentication();
+    const [logoutError, setLogoutError] = useState<string | null>(null);
+    const [isLoggingOut, setLoggingOut] = useState(false);
 
-    const goToMatchForm = () => {
-        navigate("/match");
-    };
-    const goToLocalStorage = () => {
-        navigate("/stored");
-    };
-    const goToPitScoutingForm = () => {
-        navigate("/pitscouting");
-    };
-    const signOut = () => {
-        deleteCookie("user");
-        navigate("/login");
-    };
-    useEffect(() => {
-        // useEffect to run after component mounts
-        if (readCookie("user") == undefined) {
-            navigate("/login");
+    /**
+     * Starts a new scouting workflow only after warning-time reauthentication.
+     * Existing drafts are unaffected because this check runs before navigation.
+     */
+    const openScoutingForm = async (path: string) => {
+        if (await requireFreshSession()) {
+            navigate(path);
         }
-    }, []);
+    };
+
+    const signOut = async () => {
+        setLoggingOut(true);
+        setLogoutError(null);
+
+        try {
+            await logout();
+            navigate(APP_ROUTES.login, { replace: true });
+        } catch (error) {
+            setLogoutError(
+                error instanceof Error
+                    ? error.message
+                    : "Sign out failed. Please try again.",
+            );
+        } finally {
+            setLoggingOut(false);
+        }
+    };
+
     return (
         <div className="flex flex-col items-center justify-center space-y-6">
             <h1 className="font-bold text-white text-4xl underline">
-                {readCookie("user") === undefined
-                    ? "Welcome to Sim-scouting!"
-                    : "Welcome to Sim-scouting, " + readCookie("user")}
+                Welcome to Sim-scouting, {user?.name}
             </h1>
 
             <p className="text-gray-200 text-center w-full max-w-xl">
@@ -61,39 +50,46 @@ const Home: React.FC = () => {
                 scouting experience.
             </p>
 
-            <div>
-                {debug && (
-                    <a className="font-small text-red-500 text-2xl px-4 py-3 rounded-2xl">
-                        ⚠ debug mode on ⚠
-                    </a>
-                )}
-            </div>
+            {user?.debug && (
+                <p className="font-small text-red-500 text-2xl px-4 py-3 rounded-2xl">
+                    ⚠ debug mode on ⚠
+                </p>
+            )}
 
             <button
+                type="button"
                 className="bg-sky-600 font-medium text-white text-3xl px-4 py-3 rounded-2xl hover:bg-sky-700 transition-colors"
-                onClick={goToMatchForm}
+                onClick={() => void openScoutingForm(APP_ROUTES.match)}
             >
                 Scout!
             </button>
             <button
+                type="button"
                 className="bg-green-600 font-medium text-white text-3xl px-4 py-3 rounded-2xl hover:bg-green-700 transition-colors"
-                onClick={goToLocalStorage}
+                onClick={() => navigate(APP_ROUTES.localData)}
             >
                 View Local Data
             </button>
             <button
+                type="button"
                 className="bg-rose-600 font-medium text-white text-3xl px-4 py-3 rounded-2xl hover:bg-rose-700 transition-colors"
-                onClick={goToPitScoutingForm}
+                onClick={() => void openScoutingForm(APP_ROUTES.pit)}
             >
                 Pit scouting
             </button>
-            {signedIn && (
-                <button
-                    className="bg-slate-600 font-medium text-white text-3xl px-4 py-3 rounded-2xl hover:bg-slate-700 transition-colors"
-                    onClick={signOut}
-                >
-                    Sign out
-                </button>
+            <button
+                type="button"
+                className="bg-slate-600 font-medium text-white text-3xl px-4 py-3 rounded-2xl hover:bg-slate-700 transition-colors disabled:opacity-60"
+                onClick={() => void signOut()}
+                disabled={isLoggingOut}
+            >
+                {isLoggingOut ? "Signing out..." : "Sign out"}
+            </button>
+
+            {logoutError && (
+                <p role="alert" className="text-red-300">
+                    {logoutError}
+                </p>
             )}
         </div>
     );

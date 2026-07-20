@@ -1,25 +1,16 @@
 {
-    "headers": [
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "installCommand": "npm ci && npm --prefix frontend ci",
+    "buildCommand": "npm --prefix frontend run build",
+    "outputDirectory": "frontend/dist",
+    "rewrites": [
         {
-            "source": "/api/(.*)",
-            "headers": [
-                {
-                    "key": "Access-Control-Allow-Credentials",
-                    "value": "true"
-                },
-                {
-                    "key": "Access-Control-Allow-Origin",
-                    "value": "https://3464scouting.vercel.app"
-                },
-                {
-                    "key": "Access-Control-Allow-Methods",
-                    "value": "GET,OPTIONS,PATCH,DELETE,POST,PUT"
-                },
-                {
-                    "key": "Access-Control-Allow-Headers",
-                    "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization"
-                }
-            ]
+            "source": "/api/:path*",
+            "destination": "/api/index"
+        },
+        {
+            "source": "/((?!api(?:/|$)).*)",
+            "destination": "/index.html"
         }
     ]
 }

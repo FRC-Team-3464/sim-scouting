@@ -17,44 +17,83 @@ Built for the First Robotics Competition REBUILT 2026
 - Questionnaire detailing all the data about another team
 - Offline storage, for the terrible connection found at competitions
 - Linked to usernames (less false data)
-- Google Auth for creating users
+- Firebase Authentication email/password accounts
 
 ## Installation
- Clone the repository and install dependencies. Node must be first installed
+
+Clone the repository and install dependencies. This project requires Node.js
+22.x.
 
 ```
 git clone https://github.com/FRC-Team-3464/sim-scouting
 cd sim-scouting
 npm install
+npm --prefix frontend install
 ```
 
-To build frontend:
+Start the backend and frontend in separate terminals:
+
+```bash
+npm run dev
+npm --prefix frontend run dev
 ```
-npm build
+
+To build the frontend:
+
 ```
+npm --prefix frontend run build
+```
+
+The backend requires `.env.development`, and the frontend requires
+`frontend/.env.development`. Start with the corresponding tracked `.example`
+files. See `TECHNICAL_DOCUMENTATION.md` for the current variables and security
+model; a complete new-contributor environment guide is planned after the
+authentication proposal is finalized.
+
+## Hosted staging and production architecture
+
+The approved Vercel deployment uses one public origin:
+
+```text
+Web: https://sim-city-scouting.vercel.app
+API: https://sim-city-scouting.vercel.app/api/*
+```
+
+The same repository is connected to two root-level Vercel projects. The
+`sim-city-scouting` project deploys `main` to production, and
+`sim-city-scouting-staging` deploys the `staging` branch to
+`https://sim-city-scouting-staging.vercel.app`. Both projects use the root
+`vercel.json`, which installs both dependency trees, builds `frontend/dist`,
+and keeps React Router routes working. An explicit `/api/:path*` rewrite sends
+API requests to the concrete `api/index.js` Express Function before the React
+SPA fallback is applied. React uses the relative API base `/api`, so cookies
+remain same-origin in both environments.
+
+Hosted staging shares the existing development Firebase project but uses a
+separate staging service-account key and CSRF secret. Production uses a
+separate Firebase project and credentials. Follow
+[`docs/deployment-setup.md`](docs/deployment-setup.md) to create both projects
+without placing secrets in tracked files.
 
 # Documentation
 ## Firebase
 Working with the best free database:
-- SERVER SIDE (backend/server.js)
+- SERVER SIDE (`backend/app.js`, started locally by `backend/server.js`)
 --
   - implementation of [node.js](https://nodejs.org/docs/latest/api/) and [express.js](https://expressjs.com/en/5x/api.html)
-  - GET to "/debug": works with debug.tsx. just delivers which uid's to allow
-  - POST to "/write": writes to theh database
+  - POST to "/write": writes authenticated scouting data with CSRF protection and server-derived scout identity
 > [!WARNING]
 > to write you must submit a JSON.
-  - POST to "/read": reads documents. submit a path
-  - POST to "/signup": creates users
-  - POST to "/login": fetches hashed passwords to authenticate users
-  - POST to "/register": make user
+  - POST to "/read": reads documents for an authenticated user; submit a path
+  - `/auth/*`: registration, login, logout, session, and CSRF routes
 -
 
 ### Requests  
 Every request on the server side has 2 properties: req (request), and res (response). by using app.use(express.json()), both of these properties will be jsons. [Request types](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Methods).
-- CLIENT SIDE (frontend/src/scripts/firebase.tsx)
---
-  - Most of the functions simply make a post request to server.js, except
-  - register(): uses sha256 to encrypt passwords. If you don't know what this does, ask Ms. Meyer, and say sam sent you
+The React application uses `frontend/src/api/client.ts` and communicates only
+with Node. Password verification, Firebase tokens, session cookies, and
+Firestore access are handled by the backend. See `TECHNICAL_DOCUMENTATION.md`
+for the current API and security design.
 ## Components (frontend/src/components)
 
 ### AutoResizeTextArea 
@@ -132,23 +171,16 @@ MultiCounterInput.tsx
 ## Scripts
 
 ### seed.tsx
-- Function that returns fake match data as a __*JSON*__.
-
-### user.tsx
-- Has functions that relate to reading and generating the users cookie.
-
-### debug.tsx
-- fetches which users have higher access
-
-### firebase.tsx
-- view Firebase section of README.md
+- Retained debug-visible generator for synthetic match data. It has known inconsistencies and may be redesigned with the future purpose-specific data API.
 
 ## Other
 
 ### .env
 - File that has values that are kept hidden from the public.
-- Used to hold api keys and secret values.
-- Each variable name must be capitalized, underscores instead of spaces, and start with __VITE___
+- Backend environment files hold Firebase Admin credentials, API configuration,
+  session settings, and the CSRF secret.
+- Frontend environment files contain browser-visible values and may use the
+  `VITE_` prefix. Never place a secret in a `VITE_` variable.
 
 ### .gitignore
 - Makes git ignore files, and not show them on the repository.

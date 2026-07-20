@@ -1,15 +1,22 @@
 {
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "dependencies": {
-    "cors": "^2.8.6",
+    "cookie-parser": "^1.4.7",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "firebase": "^12.8.0",
-    "firebase-admin": "^12.7.0",
-    "nodemon": "^3.1.11"
+    "firebase-admin": "13.6.0"
   },
   "scripts": {
+    "debug:claim": "NODE_ENV=development node ./backend/scripts/set-debug-claim.js",
     "dev": "NODE_ENV=development nodemon ./backend/server.js",
-    "start": "NODE_ENV=production node ./backend/server.js"
+    "start": "NODE_ENV=production node ./backend/server.js",
+    "test:backend": "node --test backend/test/*.test.js"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11",
+    "supertest": "^7.2.2"
   }
 }

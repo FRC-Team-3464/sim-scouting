@@ -1,10 +1,11 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { writeToDb } from "../scripts/firebase";
+import { writeToDb } from "../api/scouting";
 import ReactJsonView from "@microlink/react-json-view";
 import seedDataBase from "../scripts/seed";
 import IntegerInput from "../components/IntegerInput";
-import { debug } from "./Home";
+import { useAuthentication } from "../auth/use-authentication";
+import { APP_ROUTES } from "../routes";
 
 interface ActionComponentProps {
     onSubmit: () => void;
@@ -19,7 +20,7 @@ const ActionComponent: React.FC<ActionComponentProps> = ({
 }) => {
     const navigate = useNavigate();
     const goBack = () => {
-        navigate("/");
+        navigate(APP_ROUTES.home);
     };
 
     return (
@@ -62,8 +63,10 @@ const ActionComponent: React.FC<ActionComponentProps> = ({
 
 const LocalStorageView: React.FC = () => {
     const navigate = useNavigate();
+    const { user } = useAuthentication();
+    const debug = user?.debug === true;
     const goBack = () => {
-        navigate("/");
+        navigate(APP_ROUTES.home);
     };
 
     const [seedNumber, setSeedNumber] = useState(1);
