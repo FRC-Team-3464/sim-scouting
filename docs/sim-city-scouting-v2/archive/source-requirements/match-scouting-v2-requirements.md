@@ -1,11 +1,13 @@
 # Sim-City Match Scouting — Recommended Target Requirements
 
-**Product:** Sim-City Robotics Scouting PWA  
-**Area:** Match Scouting  
-**Game context:** FRC REBUILT 2026  
-**Document status:** Recommended target design and migration plan  
-**Prepared from:** Current implementation requirements, broader PWA requirements, the 2026 FRC game structure, and scouting data-quality principles  
-**Important:** This document treats the existing application as a compatibility baseline, not as the correct future workflow.
+> Archived source requirement. It informed, but does not override, the canonical product requirements.
+
+**Product:** Sim-City Robotics Scouting PWA
+**Area:** Match Scouting
+**Game context:** FRC REBUILT 2026
+**Document status:** Recommended target design; reconciled with the approved clean-break migration
+**Prepared from:** Current implementation requirements, broader PWA requirements, the 2026 FRC game structure, and scouting data-quality principles
+**Important:** The existing application is implementation evidence only. V2 has no legacy-data preservation, adapter, or compatibility requirement.
 
 ---
 
@@ -684,7 +686,7 @@ Use append/correct/void semantics so the audit trail and event order remain reco
 
 ### 10.3 Record summary
 
-Maintain a derived summary for fast display and compatibility, but do not make it the only source of truth.
+Maintain a derived summary for fast display and queries, but do not make it the only source of truth.
 
 ```ts
 interface MatchScoutSummary {
@@ -717,16 +719,11 @@ Official data should not overwrite robot-level observed data.
 
 ---
 
-## 11. Migration from the current payload
+## 11. Clean break from the current payload
 
 ### 11.1 Migration rule
 
-Do not freeze the new UX around the legacy payload. Instead:
-
-1. store the new event-based record locally;
-2. derive legacy summary fields for the existing backend during a transition period;
-3. add a versioned v2 endpoint that accepts the new record; and
-4. retire ambiguous legacy fields after analytics consumers migrate.
+Do not freeze the new UX around the legacy payload. Store the new event-based record locally and submit only to versioned v2 endpoints. Do not derive legacy fields, dual-write, import existing legacy records, or keep legacy analytics operational. Remove legacy routes after v2 acceptance as defined by the cutover plan.
 
 ### 11.2 Legacy-field recommendations
 
@@ -737,8 +734,8 @@ Do not freeze the new UX around the legacy payload. Instead:
 | `teamNumber` | Preserve, but derive from assignment. |
 | `matchNumber` | Preserve with competition level, set number, replay number, and event key. |
 | `allianceColor` | Add and derive from schedule. |
-| `autoFuel`, `transitionFuel`, shift fuel, `endgameFuel` | Preserve temporarily as derived estimates or exact totals depending on scouting mode. Add confidence/range metadata. |
-| `autoClimbed` | Replace with an explicit Auto climb result enum; derive legacy boolean. |
+| `autoFuel`, `transitionFuel`, shift fuel, `endgameFuel` | Replace with v2 observation-derived estimates or exact totals depending on the validated scouting mode. Add confidence/range metadata. |
+| `autoClimbed` | Replace with an explicit Auto climb result enum. |
 | `autoHoardedFuel` | Define precisely or remove. “Hoarded” is too subjective without an observable rule. |
 | `shiftNHubActive` | Derive from Shift 1 inactive alliance; do not edit independently. |
 | `shiftNCollected` | Replace boolean with collection events/source/count or role duration. |
@@ -1108,10 +1105,10 @@ Request designs and prototypes for at least:
 
 ### Migration
 
-27. The application can derive the existing summary payload during migration.
+27. The application writes only v2 contracts and never derives a legacy payload.
 28. A versioned v2 API stores raw events and derived summaries.
-29. Existing analytics continue to operate until intentionally migrated.
-30. The original implementation remains recoverable through source control; this document does not require destructive replacement in one release.
+29. Existing legacy data is not imported into v2 analytics.
+30. Cutover removes legacy routes only after v2 acceptance; rollback does not require legacy-data compatibility.
 
 ---
 
@@ -1143,11 +1140,11 @@ Request designs and prototypes for at least:
 - Auto, active-shift, inactive-shift, and End Game components
 - post-match review
 
-### Phase 3 — Backend v2 and migration
+### Phase 3 — Backend v2 and clean cutover
 
 - versioned event-based submission endpoint
 - validation and normalization
-- legacy-summary adapter
+- legacy-route removal after v2 acceptance
 - official-result linking
 - duplicate/conflict tools
 
@@ -1182,8 +1179,8 @@ Request designs and prototypes for at least:
 9. Should autonomous paths be captured live, after the match, or by a dedicated observer?
 10. What is the minimum official data package required before devices go offline?
 11. How long should synced local records remain on shared devices?
-12. Which existing reports depend on the legacy payload fields?
-13. When will the v2 event-based API and analytics migration occur?
+12. Which v2 reports are required for the first competition release?
+13. When will the v2 event-based API cutover occur?
 14. Is QR transfer worth the operational complexity for your competitions?
 15. Which browser/device matrix must be supported and tested?
 

@@ -36,7 +36,7 @@ The frontend and backend are separate Node projects:
 
 ### 2.1 Authentication implementation status
 
-The completed authentication work is traceable to the implementation chunks in [`docs/proposals/firebase-session-authentication.md`](docs/proposals/firebase-session-authentication.md):
+The completed authentication work is traceable to the implementation chunks in [`docs/platform/proposals/firebase-session-authentication.md`](docs/platform/proposals/firebase-session-authentication.md):
 
 | Chunk | Completed result | Technical documentation coverage |
 |---|---|---|
@@ -102,8 +102,8 @@ sim-scouting/
 │   ├── vite.config.ts            React and Tailwind Vite plugins
 │   └── tsconfig*.json            Browser and build TypeScript settings
 ├── package.json                  Backend/runtime dependencies
-├── docs/proposals/               Planned authentication migration
-├── docs/technical-debt/          Recorded out-of-scope quality baselines
+├── docs/platform/proposals/      Platform architecture proposals
+├── docs/platform/technical-debt/ Recorded out-of-scope quality baselines
 ├── vercel.json                   Root build and SPA fallback configuration
 └── README.md                     Original project introduction
 ```
@@ -650,7 +650,7 @@ The tracked production examples now use `CORS_ALLOWED_ORIGIN=https://sim-city-sc
 
 The staging Vercel project has been created and temporarily deploys `feat/firebase-session-auth` while its configuration is validated. It must be switched to the protected `staging` branch after the feature is merged. Production setup and the deployment work are not complete until both environments pass their manual registration, login, session restoration, protected write, direct SPA navigation, and logout checks. Generated Vercel Preview origins are intentionally not trusted for authenticated mutations; the stable staging project is the pre-production authentication environment.
 
-Hosted staging uses `https://sim-city-scouting-staging.vercel.app` and the existing development Firebase project, so it intentionally shares local-development users and Firestore data. It uses a separate service-account key within that Firebase project and a staging-only CSRF secret. Production uses its separate Firebase project and credentials. The complete project-creation, variable, branch, and smoke-test procedure is in [`docs/deployment-setup.md`](docs/deployment-setup.md).
+Hosted staging uses `https://sim-city-scouting-staging.vercel.app` and the existing development Firebase project, so it intentionally shares local-development users and Firestore data. It uses a separate service-account key within that Firebase project and a staging-only CSRF secret. Production uses its separate Firebase project and credentials. The complete project-creation, variable, branch, and smoke-test procedure is in [`docs/platform/deployment/deployment-setup.md`](docs/platform/deployment/deployment-setup.md).
 
 A possible future frontend/backend repository split is outside this proposal chunk. It should preserve the same public web origin and `/api` contract, for example by proxying `/api/*` through the web deployment, rather than changing browsers to cross-origin session cookies.
 
@@ -826,4 +826,4 @@ Before a competition deployment:
 | `frontend/src/scripts/seed.tsx` | Retained legacy synthetic match generator with known inconsistencies |
 | `frontend/src/components/*` | Reusable scouting inputs and footer |
 | `vercel.json` | Install both projects, build `frontend/dist`, and provide the React SPA fallback |
-| `docs/deployment-setup.md` | Create and verify the separate staging and production Vercel projects |
+| `docs/platform/deployment/deployment-setup.md` | Create and verify the separate staging and production Vercel projects |

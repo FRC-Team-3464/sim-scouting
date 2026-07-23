@@ -6,6 +6,8 @@ Create a detailed handoff document for a new Codex session. Codex will have
 access to the repository but will not have access to this v0 conversation or
 any previous reasoning.
 
+> **Archive note:** This prompt records the original requested path. The resulting document now lives at `docs/sim-city-scouting-v2/architecture/codex-project-handoff.md`.
+
 Create:
 
 `docs/scouting-v2/codex-project-handoff.md`

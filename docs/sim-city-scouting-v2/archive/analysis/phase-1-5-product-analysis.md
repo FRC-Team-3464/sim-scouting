@@ -1,5 +1,7 @@
 # Phase 1.5 — Corrected & Expanded Product Analysis
 
+> Archived historical input. It is not a current requirement; use the canonical v2 documentation index. In particular, its required-photo proposal is superseded by ADR 0009.
+
 **Status:** Analysis only. No implementation. No React code.
 **Framing change:** This is now a **greenfield rewrite** of the FRC scouting product with a
 **controlled migration** from the legacy Sim-City Scouting app. Legacy screenshots, routes, fields,
@@ -8,9 +10,9 @@ UX, and must not constrain the new information architecture.
 
 **Locked stack:** React + TypeScript + Vite + Tailwind v4 + separate Node.js backend + Firestore
 (via backend only) + IndexedDB (offline) + service worker (PWA). **No Next.js. No RSC. No Supabase.**
-Reuse the existing Firebase session-cookie + CSRF auth layer (see `scouting-redesign-spec.md` §13).
+Reuse the existing Firebase session-cookie + CSRF auth layer (see [the architecture inventory](phase-1-scouting-redesign-spec.md#13-existing-auth-layer--data-model--api-reused-as-is-documented-for-completeness)).
 
-**Companion docs:** `scouting-redesign-spec.md` (v2 data model + API), `phase-2-method-validation-plan.md`.
+**Companion docs:** [architecture inventory](phase-1-scouting-redesign-spec.md) and [method-validation plan](../../validation/scouting-method-validation.md).
 
 ---
 
@@ -56,7 +58,7 @@ Categories: **Preserve as-is** · **Preserve data, redesign UX** · **Replace co
 | **Local Data** (`localStorage`, unguarded parse, no status) | **Replace completely** | Becomes IndexedDB outbox with explicit sync states (§G). |
 | **Submission & recovery** (`{team}/{match}` overwrite, no idempotency) | **Replace completely** | Purpose-specific validated endpoints, composite identity, idempotency, no silent overwrite. |
 | **Navigation** (Back buttons + history replace) | **Replace completely** | Role/workspace navigation with persistent event/assignment/sync context (§D). |
-| **Existing match/pit records already in Firestore** | **Retain for migration only** | Old shapes are not analytics-grade; import read-only into v2 during migration, not written going forward. |
+| **Existing match/pit records already in Firestore** | **Remove** | Product-owner decision: do not preserve, adapt, import, or include legacy records in v2 analytics. |
 
 ---
 
@@ -135,7 +137,7 @@ match phases; final counters are **derived** from the event log, not typed.
 | Confidence levels | Available; orthogonal to the above |
 
 The **method is chosen per game element via the season package**, not hardcoded. See
-`phase-2-method-validation-plan.md` for the decision thresholds.
+[the method-validation plan](../../validation/scouting-method-validation.md) for the decision thresholds.
 
 ---
 
@@ -202,7 +204,7 @@ Every record carries an explicit lifecycle state; UI reflects it via the global 
 
 Phase 2 should be **design + method validation**, not implementation. Concretely:
 
-1. **Run the method-validation protocol** in `phase-2-method-validation-plan.md` to lock capture methods, spatial granularity, flow, and rating anchors **before** finalizing screens.
+1. **Run the method-validation protocol** in [the validation plan](../../validation/scouting-method-validation.md) to lock capture methods, spatial granularity, flow, and rating anchors **before** finalizing screens.
 2. **Design the Scout workspace end-to-end** for phone + tablet: assignment list → context confirm →
    Match Mode (auto/teleop/endgame) → post-match review → sync — including offline states (§G) and the
    alliance-aware but legible theming decision (spec §15 Q6).

@@ -1,9 +1,9 @@
 # Match Scouting Page Requirements
 
-**Product:** Sim-City Robotics Scouting Application  
-**Page:** Match Scouting (`/match`)  
-**Game context:** FRC REBUILT 2026  
-**Purpose:** Design-ready requirements to use with screenshots of the existing UI.  
+**Product:** Sim-City Robotics Scouting Application
+**Page:** Match Scouting (`/match`)
+**Game context:** FRC REBUILT 2026
+**Purpose:** Design-ready requirements to use with screenshots of the existing UI.
 **Basis:** Current form, shared controls, submission API, recovery page, routes, authentication behavior, and tests reviewed July 20, 2026.
 
 ## 1. Product objective

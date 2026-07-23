@@ -72,7 +72,7 @@ remain same-origin in both environments.
 Hosted staging shares the existing development Firebase project but uses a
 separate staging service-account key and CSRF secret. Production uses a
 separate Firebase project and credentials. Follow
-[`docs/deployment-setup.md`](docs/deployment-setup.md) to create both projects
+[`docs/platform/deployment/deployment-setup.md`](docs/platform/deployment/deployment-setup.md) to create both projects
 without placing secrets in tracked files.
 
 # Documentation

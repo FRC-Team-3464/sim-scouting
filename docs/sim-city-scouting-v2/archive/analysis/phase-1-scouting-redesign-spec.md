@@ -1,6 +1,8 @@
 # Sim City Scouting — Data Model & API Specification (v2)
 
-Status: Draft for review. No implementation yet.
+> Archived historical input. It is not an implementation contract; use the canonical architecture contracts.
+
+Status: Historical draft inventory. Superseded where it conflicts with Phase 1.6 ADRs and contracts. No v2 implementation exists yet.
 Applies to: `FRC-Team-3464/sim-scouting` (React + Vite frontend → Node/Express backend → Firestore).
 
 This spec defines a clean-break redesign. There is **no backward compatibility** with the
@@ -36,7 +38,7 @@ Auth chain reused as-is:
 - `GET  /api/auth/csrf` → issues signed double-submit CSRF token
 - `POST /api/auth/register` → `auth.createUser` (Firebase Authentication)
 - `POST /api/auth/login` → Firebase REST password exchange → HttpOnly session cookie
-- `POST /api/auth/logout` → session revocation
+- `POST /api/auth/logout` → clears the browser session cookie (it does not revoke the Firebase session)
 - `GET  /api/auth/session` → current session
 - `createRequireAuthentication` middleware → verifies session cookie, attaches `request.user`
 
@@ -376,7 +378,7 @@ so the contract the new endpoints depend on is explicit. Source: `backend/routes
 - `csrf_binding` (HttpOnly) + `csrf_token` (JS-readable) cookies; header `X-CSRF-Token` echoes the token.
 - Token is HMAC-signed and **bound** to the session cookie (or a pre-auth random binding), so a token
   copied from another browser/session fails. Exact `Origin` match against the configured frontend is
-  required. All state-changing routes require it; `/api/scouting/*` mutations reuse `protectJsonRequest`.
+  required. Modern auth and protected write routes require it; retained legacy top-level login/register routes do not. Future `/api/scouting/*` mutations reuse `protectJsonRequest`.
 
 ### 13.3 API contract (unchanged)
 

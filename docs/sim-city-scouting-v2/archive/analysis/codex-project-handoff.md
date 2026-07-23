@@ -1,14 +1,16 @@
 # Sim-City Scouting v2 — Codex Project Handoff
 
+> Archived repository handoff. Its open questions and file map are historical, not current requirements.
+
 > **Audience:** A fresh Codex session that has repository access but no access to
 > the v0 conversation or prior reasoning. This document is the entry point.
 >
 > **Repository analyzed:** `FRC-Team-3464/sim-scouting`, branch
 > `feat/firebase-session-auth`.
 >
-> **Status of this document:** Grounded in the actual repository state on that
-> branch plus the approved product-analysis and architecture documents in
-> `docs/scouting-v2/`. Every repository claim below was read from source. Where a
+> **Status of this document:** Historical onboarding inventory, corrected by the
+> Phase 1.6 ADRs and contracts. Grounded in the repository state on the recorded
+> branch plus documents now under `docs/sim-city-scouting-v2/`. Where a
 > statement is a *proposal* rather than a confirmed repository fact, it is marked
 > **(PROPOSED)**. Codex must still independently verify before implementing.
 
@@ -39,7 +41,7 @@ defects exist (weak validation, record-key collisions, no idempotency — see
 **Why a greenfield rewrite with controlled legacy transition.** The data
 structures currently written to Firestore are not analytics-grade and cannot be
 evolved in place without carrying forward invalid shapes. The team decision
-(recorded in `docs/scouting-v2/`) is to build a new v2 data model and API and
+(recorded in `docs/sim-city-scouting-v2/`) is to build a new v2 data model and API and
 **not** maintain backward compatibility with the legacy record shape. The
 transition is "controlled" in that the **existing Firebase session-cookie + CSRF
 authentication layer is deliberately reused** (it is recent, tested work on this
@@ -116,7 +118,7 @@ PROPOSED and unbuilt.**
 | `backend/middleware/csrf.js` | `createCsrfProtection({ configuration })`: signed double-submit CSRF (`protectJsonRequest`), Origin match. |
 | `backend/auth/session.js` | Session-cookie create/verify wrappers over Firebase Admin. |
 | `backend/auth/firebase-auth-rest.js` | Server-side password → Firebase ID-token exchange (Firebase Auth REST). |
-| `backend/firebase.js` | `initializeFirebase(serviceAccountKey)`: idempotent Firebase Admin init from a JSON service account; returns `{ auth, db }`. Firebase Admin 14 modular API. |
+| `backend/firebase.js` | `initializeFirebase(serviceAccountKey)`: idempotent Firebase Admin init from a JSON service account; returns `{ auth, db }`. Firebase Admin 13.6 modular API (temporary Vercel compatibility pin). |
 | `backend/config.js` | `loadConfiguration()` / `validateConfiguration()`: strict env validation (port, CORS origin, session durations, cookie security, `CSRF_SECRET` 64-hex, `FIREBASE_WEB_API_KEY`, `SERVICE_ACCOUNT_KEY`). |
 | `backend/data/scouting-record.js` | `createAuthenticatedScoutingRecord(...)` (strips client identity, sets server uid/name/`submittedAt`) and `isSharedTeamIndexPath(...)`. |
 | `backend/scripts/set-debug-claim.js` | Admin script to set a `debug` custom claim. |
@@ -130,7 +132,7 @@ PROPOSED and unbuilt.**
 | `.env.development.example`, `.env.production.example` | Backend env templates. |
 | `frontend/.env.*.example` | Frontend env templates (`VITE_API_BASE_URL`). |
 | `TECHNICAL_DOCUMENTATION.md` | Large existing technical doc (background; not authoritative over current code). |
-| `docs/deployment-setup.md`, `docs/proposals/firebase-session-authentication.md`, `docs/technical-debt/frontend-lint-baseline.md` | Existing repo docs. |
+| `docs/platform/deployment/deployment-setup.md`, `docs/platform/proposals/firebase-session-authentication.md`, `docs/platform/technical-debt/frontend-lint-baseline.md` | Existing platform docs. |
 | `notafrontend/index.html` | 16-byte placeholder; not part of the app. |
 
 **Environment configuration (confirmed):** Backend requires `PORT`,
@@ -215,7 +217,7 @@ serverless function `api/index`. In production, React and the API share one
 origin (so cross-origin cookie permission is unnecessary); credentialed CORS
 exists for local dev where Vite and Express differ in origin.
 
-### PROPOSED (in `docs/scouting-v2/`, NOT in code)
+### PROPOSED (in `docs/sim-city-scouting-v2/`, NOT in code)
 
 v2 endpoints under `/api/scouting/*`, analytics-grade Firestore collections
 (`seasons`, `events`, `matchScouting` + `observations` subcollection,
@@ -338,8 +340,8 @@ ADRs. None of the following is settled:
   transaction vs staged writes.
 - **Consensus recomputation** — when/where derived consensus is computed
   (write-time vs read-time vs scheduled).
-- **Legacy-data access** — whether any historical Firestore data is read by v2,
-  and how (read-only adapter vs ignored).
+- **Legacy-data access — RESOLVED:** v2 does not preserve, read, adapt, import,
+  or analyze historical legacy scouting data.
 - **Pit photo storage** — whether pit scouting stores images and where.
 - **QR transfer attribution** — how a relayed offline record is attributed (relay
   operator session vs signed hand-off token).
@@ -360,9 +362,8 @@ ADRs. None of the following is settled:
   (Phase 3) have not been produced or chosen.
 - **Components/screens v0 generated:** none. v0 produced Markdown specs, not
   React components.
-- **Branch/files containing v0 work:** documentation under `docs/scouting-v2/`
-  (this handoff) and related planning docs (`docs/scouting-redesign-spec.md`,
-  `docs/phase-1_5-product-analysis.md`, `docs/phase-2-method-validation-plan.md`
+- **Branch/files containing v0 work:** documentation under `docs/sim-city-scouting-v2/`
+  (this handoff) and related product, architecture, and validation documents
   in the v0 working project). No feature branch of implementation exists.
 - **Conceptual vs implementation-ready:** everything from v0 is **conceptual**.
   The confirmed repository behavior in §2–§4 is the only implementation-ready
@@ -375,7 +376,7 @@ ADRs. None of the following is settled:
 
 ## 9. Codex responsibilities
 
-1. **Read the project documentation** in `docs/scouting-v2/` and related planning
+1. **Read the project documentation** in `docs/sim-city-scouting-v2/` and related planning
    docs before acting.
 2. **Inspect the repository independently** — do not trust this document over the
    live code.
@@ -407,8 +408,8 @@ Produce an **analysis-and-decision document plus ADRs** (no production code) tha
 resolves the following, grounded in live repository inspection and the approved
 docs:
 
-- **Migration policy** — confirm the clean-break decision; define what (if
-  anything) happens to existing Firestore data.
+- **Migration policy** — implement the approved clean break: no legacy-data
+  preservation, adapter, import, or analytics inclusion.
 - **Record identity** — finalize the canonical match/pit document key.
 - **Assignment model** — define the assignment schema and lifecycle.
 - **Event package model** — define structure, source, and refresh.
@@ -466,7 +467,7 @@ When sources conflict, Codex must **report the conflict** rather than silently
 choosing. Priority order (highest first):
 
 1. **Confirmed current repository behavior** (source code on the analyzed branch).
-2. **Approved architecture-decision documents** (ADRs in `docs/scouting-v2/`).
+2. **Approved architecture-decision documents** (ADRs in `docs/sim-city-scouting-v2/architecture/adrs/`).
 3. **Approved product-analysis documents** (e.g. Phase 1.5 analysis).
 4. **Approved v0 design specifications** (once produced/approved).
 5. **Legacy screenshots and legacy requirements** (lowest — reference only).
