@@ -2,8 +2,9 @@
 
 | Metadata | Value |
 |---|---|
-| Status | Approved |
+| Status | Approved with amendments |
 | Approval scope | Slices 0–4 |
+| Approved amendments | Simple device-local timer; automatic package-defined phases; post-match timing/incompleteness flag; no routine pause/manual phase/detailed correction/per-observation confidence UI in MVP; CCR-001 through CCR-003 registry behavior |
 | Decision references | ADR 0002, ADR 0006, ADR 0007 |
 | Related contracts | [Submission Integrity](submission-integrity.md), [Assignment Model](assignment-model.md), [Season Package](season-package.md), [Offline Synchronization](offline-sync.md), [Authorization](authorization-contract.md) |
 
@@ -26,7 +27,7 @@ Canonical identity is `(seasonKey, eventKey, competitionLevel, setNumber, matchN
 ## Data model
 
 ```ts
-interface MatchRecordRevision {
+interface MatchRecord {
   recordKey: string;
   revision: number;
   state: "finalized" | "superseded" | "void";
@@ -77,6 +78,15 @@ interface MatchObservation {
 - Observations are append-oriented. Undo/correction adds a supersede or void event rather than mutating an accepted observation.
 - An active capture remains pinned to its season-package hash.
 - A record is synchronized only after finalization returns a Submission Integrity receipt.
+- The Scout starts timing with one explicit action. Active elapsed time uses a device monotonic source; persisted wall-clock anchors support restart restoration only.
+- The pinned package defines phase order and duration, and the MVP advances phases automatically without routine pause/resume or manual phase navigation.
+- Restored timing is identified. The MVP captures a simple post-match timing/incompleteness issue and optional bounded note instead of detailed clock correction or per-observation confidence prompts.
+- The optional observation uncertainty field is reserved for compatible future use and is not requested by the MVP rapid-capture UI.
+- High-throughput numeric observations use a package-configured multi-delta counter: one derived running total plus rapid positive and negative adjustment actions. Every tap appends a sequenced, elapsed-time/phase-attributed delta observation; it never mutates an earlier observation. The package defines the label, allowed deltas, bounds, and phase applicability.
+- The v1 counter validates familiarity with this interaction model only. V2 must not contractually copy its visual layout, styling, spacing, or color treatment. Invalid adjustments such as a result below the configured minimum are unavailable, and undo remains a distinct append-oriented correction path.
+- A `categorical_action` activation appends one configured option as a sequenced, elapsed-time/phase-attributed observation. It never replaces prior evidence and has no preselected option.
+- A `zone_action` or `coordinate_action` observation identifies both one action option from the pinned definition and one valid location. The non-map interaction produces the same payload meaning.
+- Raw `timer`, `stopwatch`, and `cycle_timer` payload kinds are invalid. Timing controls persist contracted actions or state transitions; duration and cycle values are derived from their ordered elapsed-time evidence.
 
 ## Trust and ownership boundaries
 
@@ -90,7 +100,7 @@ interface MatchObservation {
 
 ## Validation rules
 
-Validate authentication, CSRF, capability, envelope, assignment/context, season-package hash, observation schema, timing ranges, and cross-field rules in that order. Context numbers must be positive and within source/package bounds. Observation types and payloads must exist in the pinned package. Limits are one MiB per request, 500 observations or 256 KiB per chunk, 5,000 observations per record unless the package lowers it, and 1,000 note characters.
+Validate authentication, CSRF, capability, envelope, assignment/context, season-package hash, observation schema, timing ranges, and cross-field rules in that order. Context numbers must be positive and within source/package bounds. Observation types and payloads must exist in the pinned package and satisfy the Season Package registry definition, including categorical option membership and the paired action/location requirements for spatial actions. Raw timer/cycle payload discriminators fail validation. Limits are one MiB per request, 500 observations or 256 KiB per chunk, 5,000 observations per record unless the package lowers it, and 1,000 note characters.
 
 ## Storage, indexes, and retention
 
@@ -140,4 +150,4 @@ Audit finalization, correction, void, stale-assignment acceptance, and privilege
 
 ## Deferred decisions
 
-Capture methods, spatial inputs, timing presentation, confidence granularity, and staffing remain governed by scouting-method validation.
+Capture methods, spatial inputs, estimate-confidence semantics, rating anchors, and staffing remain governed by scouting-method validation. The simple MVP timer and issue flag are approved. Advanced timer controls, detailed clock correction, and granular confidence prompting require post-MVP validation and an approved contract amendment.

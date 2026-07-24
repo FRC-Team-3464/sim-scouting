@@ -1,6 +1,6 @@
 # Sim-City Scouting v2 architecture overview
 
-**Status:** Approved for Slices 0–3 with documented empirical and later-slice deferrals
+**Status:** Approved through Slice 5, with documented empirical and later-slice deferrals
 **Repository commit analyzed:** `ee46a335cf2365376f00530027ff4c01dba651d4`
 **Baseline:** `feat/firebase-session-auth` at `b5f62095c95b6a563fd5f1bcadfd5d6f226c8b5d`
 
@@ -30,6 +30,9 @@ The browser never reads or writes Firestore directly. Local lifecycle fields are
 - Retain the current frontend/backend stack and modern authentication flow.
 - Use a clean v2 namespace and contracts with no legacy adapter, migration, or dual write.
 - Model logical match records, local captures, observations, revisions, and idempotency keys separately.
+- Use one explicit Start Match action, a device-local monotonic elapsed timer, automatic season-package phase progression, and a simple post-match timing/incompleteness flag; advanced timer controls and per-observation confidence prompts are not MVP behavior.
+- Preserve the v1 multi-delta running-total concept for high-throughput numeric capture while requiring a new responsive, accessible visual implementation with package-configured deltas and append-oriented corrections; v1 styling and layout are not a design template.
+- Define a versioned compiled controlled component registry in the Season Package contract; each observation independently selects an allow-listed kind, method validation owns season-specific selection/configuration, and packages never define layout, code, or new kinds. Registry schema version 1 includes the approved CCR-001 categorical append action, CCR-002 categorized spatial action, and CCR-003 timestamp-derived timer/cycle behavior from the [historical coverage review](../validation/controlled-component-registry-evidence.md#gap-resolutions-and-recommendations).
 - Keep observations append-oriented; corrections supersede or void rather than mutate history silently.
 - Publish bounded, versioned season/event packages rather than executable remote forms.
 - Use IndexedDB and a foreground outbox coordinator; service-worker background sync is optional assistance only.
@@ -42,7 +45,7 @@ The browser never reads or writes Firestore directly. Local lifecycle fields are
 
 ## Pit photos
 
-Remote photos are not part of the MVP architecture. Structured pit records contain no required photo and remain fully operational without blob storage. Optional photo references may be reserved, but upload APIs, local photo queues, image processing, provider selection, Firebase Blaze billing, quotas, and retention are deferred until product value and event-scale usage justify them. Firestore and scouting JSON must never store image bytes.
+Remote photos are not part of the MVP architecture. Structured pit records contain no photo and remain fully operational without blob storage. MVP has no dedicated external photo/album link or external-media workflow. Contracts may declare optional `photoIds` as a future compatibility point, but the field must be absent from MVP requests and canonical revisions and creates no current identifier namespace. Upload APIs, local photo queues, image processing, provider selection, Firebase Blaze billing, quotas, and retention are deferred until product value and event-scale usage justify them. Firestore and scouting JSON must never store image bytes.
 
 ## Authentication and authorization boundary
 
@@ -75,4 +78,4 @@ Node initiates Firebase-managed verification and recovery without exposing Fireb
 
 ## Validation still required
 
-Authentication and authorization product/architecture decisions are closed in ADRs 0013–0014 and their contracts. The remaining [decision-review register](../delivery/delivery-plan.md#decision-review-register) contains only scouting-method and optional-photo deferrals. Lead Scouts must complete [scouting-method validation](../validation/scouting-method-validation.md) for capture methods and staffing. Engineering-owned verification remains open for browser storage and migrations, representative-device performance, Firebase revocation propagation, authorization-cache and audit-volume behavior, Vercel/Firestore limits, environment isolation, indexes, cache/update behavior, observability, and tested backup/export procedures. The [Slice 0 entry criteria](../delivery/delivery-plan.md#slice-0-entry-criteria) distinguish approved product policy from implementation evidence still required before production writes.
+Authentication and authorization product/architecture decisions are closed in ADRs 0013–0014 and their contracts. Controlled Component Registry architecture closure is complete: CCR-001 through CCR-003 are approved and incorporated into schema version 1. The remaining [decision-review register](../delivery/delivery-plan.md#decision-review-register) contains only scouting-method and staffing validation. Optional photos remain a later extension governed by approved ADR 0009, not a current approval item. Lead Scouts must complete [scouting-method validation](../validation/scouting-method-validation.md) for season-specific capture methods and staffing. Engineering-owned verification remains open for browser storage and migrations, representative-device performance, Firebase revocation propagation, authorization-cache and audit-volume behavior, Vercel/Firestore limits, environment isolation, indexes, cache/update behavior, observability, and tested backup/export procedures. The [Slice 0 entry criteria](../delivery/delivery-plan.md#slice-0-entry-criteria) distinguish approved product policy from implementation evidence still required before production writes.

@@ -1,6 +1,6 @@
 # ADR 0011 — Consensus and data quality
 
-**Status:** Proposed
+**Status:** Approved by product owner and principal architect
 
 ## Context
 

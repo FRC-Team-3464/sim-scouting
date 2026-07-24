@@ -1,6 +1,6 @@
 # Architecture contracts
 
-**Status:** Approved for Slices 0–3; later-slice and empirical deferrals remain
+**Status:** Approved through Slice 5; later-slice and empirical deferrals remain
 
 ## Contract map
 

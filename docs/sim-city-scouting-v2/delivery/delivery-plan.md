@@ -36,6 +36,36 @@ Authentication and authorization are cross-cutting, but their primary implementa
 
 Slice 0 does not cut over the user-facing login flow. Slice 1 is the primary authentication implementation slice. Authorization begins as a mandatory foundation in Slice 0, becomes operational with identity and membership resolution in Slice 1, and remains an acceptance requirement for every subsequent slice.
 
+## Controlled component registry delivery ownership
+
+The [Season Package contract](../architecture/contracts/season-package.md#controlled-component-registry) is the sole authority for component kinds, configuration, payloads, answer states, bounds, accessibility responsibilities, compatibility, and extension rules. The [historical coverage review](../validation/controlled-component-registry-evidence.md) supplies traceable evidence and gap recommendations without becoming a second schema authority. The registry is defined before empirical field selection so prototypes, packages, clients, and backend validation share one vocabulary.
+
+| Stage | Primary responsibility | Required output | Exit boundary |
+|---|---|---|---|
+| Architecture closure | **Complete:** product owner and principal architect approved CCR-001 through CCR-003 on 2026-07-24 | Versioned definition/payload interfaces, interaction models, bounds, answer-state rules, accessibility ownership, compatibility, and extension policy in the Season Package contract | No design, validation plan, or implementation invents an undeclared component kind |
+| UI design exploration | Design explores accessible responsive renderers for approved kinds without embedding package-specific styling | Component states and variants across supported devices, including unanswered/error/disabled/review states and non-map alternatives | Visual artifacts preserve contract behavior but do not become schema authority |
+| Scouting-method validation | Lead Scouts and Strategists select the least burdensome approved component/configuration for each season observation | Ground-truth evidence, accepted limitations, selected kind/configuration, staffing implications, and approvers | No field enters a published package without a strategy use and validated method; failed methods are simplified or removed |
+| Slice 0 | Engineering converts the approved registry into executable shared schemas and fixtures | Runtime configuration/payload validators, valid/invalid fixtures, canonical-hashing vectors, compatibility tests, and renderer/server contract-test helpers | Browser and Node agree on every registry fixture; unknown kinds/versions fail closed |
+| Slice 2 | Engineering implements package authoring, validation, publication, download, and activation | Hash-addressed observation/component resources, cross-reference validation, compatibility enforcement, representative payload fixtures, and atomic known-good activation | An approved package can be published and activated without executable or unknown content |
+| Slice 4 | Engineering implements and validates the Match subset selected for the season | Offline-capable compiled renderers, append-action/draft-response behavior, review states, payload validation, accessibility, and representative-device evidence | The full assigned Match workflow passes through receipt using only pinned registry definitions |
+| Slice 5 | Engineering implements and validates the Pit subset selected for the season | Structured Pit renderers and revision payloads using the same registry rules, with zero photo dependency | The full assigned Pit workflow passes through receipt using only pinned registry definitions |
+| Future extension | Product, architecture, design, and engineering review any new kind or incompatible schema | Approved ADR/contract amendment, implementation, validators, fixtures, accessibility behavior, compatibility range, and released client support | No season package references the extension before compatible clients and backend validation exist |
+
+Season-specific labels, deltas, range buckets, choices, anchors, units, zones, component selection, and staffing are not chosen by architecture closure. They are selected through validation and published as immutable package content. A package may configure an approved kind but may never define layout, styling, executable behavior, or a new kind.
+
+### Recommended registry sequence
+
+1. **Complete — close the architectural vocabulary.** CCR-001 through CCR-003 are approved and incorporated into the allow-listed kinds, definition and payload shapes, resource references, bounds, answer states, accessibility ownership, compatibility, and extension rules in the Season Package contract.
+2. **Explore compiled renderers.** Design every relevant state on representative supported form factors using the approved behavior. Design may recommend a contract amendment but cannot create package-defined UI behavior.
+3. **Validate each observation empirically.** Begin with the strategy decision, select the least burdensome existing kind/configuration, test it against ground truth, and record the Lead Scout, Strategist, product, engineering, and accessibility outcomes required by the validation protocol.
+4. **Resolve future gaps before implementation.** Simplify or remove a field that fails validation. If a genuinely necessary need has no approved kind, pause that field and approve an ADR/contract amendment and compatible registry version before implementation; do not hide the gap in package JSON or a prototype.
+5. **Make the contract executable in Slice 0.** Implement shared runtime validators, canonical fixtures, compatibility checks, and cross-runtime tests for every approved definition and payload.
+6. **Make packages authoritative in Slice 2.** Author, validate, hash, publish, download, and atomically activate separate observation and component resources with complete cross-reference validation.
+7. **Deliver only the validated subsets.** Slice 4 ships Match renderers and Slice 5 ships Pit renderers needed by the approved season configuration; neither slice adds an ad hoc kind.
+8. **Extend deliberately.** A future kind or incompatible schema repeats architecture, design, validation, implementation, accessibility, compatibility, and release approval before a published package may reference it.
+
+Steps 2 and 3 may iterate together, but Steps 1 and 4 bound that iteration, and Step 5 must finish before package publication or capture implementation depends on the registry. The [scouting-method validation protocol](../validation/scouting-method-validation.md#registry-dependency-and-decision-ownership) owns per-observation evidence; the Season Package contract remains schema authority.
+
 ## Detailed slice definitions
 
 These definitions are canonical. Each slice must satisfy its prerequisites, deliverables, test gates, operational constraints, and exit criteria. Later slices may start discovery earlier, but implementation cannot bypass an unmet dependency or redefine an approved contract.
@@ -48,7 +78,7 @@ These definitions are canonical. Each slice must satisfy its prerequisites, deli
 
 **Deliverables:**
 
-- Runtime validators and fixtures for session v2, authorization projection, capability/scope grants, common errors, audit events, canonical hashing, receipts, packages, assignments, and record envelopes.
+- Runtime validators and fixtures for session v2, authorization projection, capability/scope grants, common errors, audit events, canonical hashing, receipts, packages, assignments, record envelopes, every controlled component definition/payload, and component/package compatibility.
 - Pure default-deny policy evaluator with typed scope containment, deny precedence, authorization-version handling, recent-auth decision input, and structured safe denial output.
 - Endpoint policy-declaration mechanism that rejects undeclared protected routes.
 - Membership/grant schemas, index definitions, emulator fixtures, authorization-version mutation semantics, and cache invalidation interfaces.
@@ -95,16 +125,16 @@ These definitions are canonical. Each slice must satisfy its prerequisites, deli
 
 **Objective:** Deliver bounded, immutable, hash-verified configuration and event context that can be activated atomically and used while offline or stale.
 
-**Prerequisites:** Slice 1 complete; ADRs 0004–0005 and package contracts approved; TBA source policy, Lead Scout override scope, Administrator publication policy, compatibility rules, and package limits fixed.
+**Prerequisites:** Slice 1 complete; ADRs 0004–0005 and package contracts approved; controlled component registry and common invariants approved; Slice 0 registry schemas/fixtures passing; TBA source policy, Lead Scout override scope, Administrator publication policy, compatibility rules, and package limits fixed.
 
 **Deliverables:**
 
-- Season-package draft, validation, publication, supersede, retire, revoke, rollback, and immutable resource APIs.
+- Season-package draft, controlled observation/component resource validation, representative payload fixtures, publication, supersede, retire, revoke, rollback, and immutable resource APIs.
 - Administrator publication with mandatory confirmation and change reason; no second-person approval workflow.
 - TBA-only event import jobs, bounded projections, narrow reasoned Lead Scout overrides, provenance, ETags, paging, resource hashes, and lifecycle states.
 - Client staging, compatibility validation, hash verification, atomic activation, active/previous known-good selection, pinned capture references, freshness, and cleanup.
 
-**Security and test gates:** Package capability/scope denial, malicious/executable content rejection, hash/compatibility failure, TBA normalization, override version conflicts, publication/revocation audit, and direct API access.
+**Security and test gates:** Package capability/scope denial, unknown component kind/version, malformed definition/payload fixture, broken cross-reference, malicious/executable content rejection, hash/compatibility failure, TBA normalization, override version conflicts, publication/revocation audit, and direct API access.
 
 **Offline, performance, and accessibility:** Last complete compatible package remains available with textual freshness/revocation status. Resources stay within contract budgets and activate without blocking interaction.
 
@@ -145,7 +175,7 @@ These definitions are canonical. Each slice must satisfy its prerequisites, deli
 
 **Deliverables:**
 
-- Assignment-derived context confirmation, monotonic match timing/audit, package-configured observations, undo/supersede, post-match review, and explicit unanswered states.
+- Assignment-derived context confirmation, one explicit timer start, device-local monotonic timing, automatic package-defined phase progression, restart restoration, simple post-match timing/incompleteness flag, compiled renderers for the season-selected Match registry subset, a redesigned responsive/accessible multi-delta running-total control where configured, undo/supersede, post-match review, and explicit unanswered states. Routine pause/manual phase/detailed clock correction/per-observation confidence controls are excluded from MVP; v1 counter styling/layout is not copied.
 - Transactional IndexedDB capture/observations/outbox, immutable canonical payload/hash, bounded chunk upload, finalization, receipt reconciliation, retry, rejection, and conflict recovery.
 - Purpose-specific Match APIs with current capability, event/assignment/ownership, package, resource-state, idempotency, and audit enforcement.
 - Own-record/receipt/sync-status views and Lead Scout conflict visibility without ordinary Scout peer access or live leaderboards.
@@ -164,11 +194,11 @@ These definitions are canonical. Each slice must satisfy its prerequisites, deli
 
 **Objective:** Deliver attributable, offline structured Pit Scouting and derived team/event profiles with zero photo dependency.
 
-**Prerequisites:** Slices 1–3 complete and shared submission/offline foundations from Slice 4 accepted; ADR 0009 and Pit contract approved; season pit questions defined. Photo-provider or billing decisions are not prerequisites.
+**Prerequisites:** Slices 1–3 complete and shared submission/offline foundations from Slice 4 accepted; ADR 0009 and Pit contract approved; controlled registry schemas/fixtures passing; season Pit questions mapped to approved component definitions. Photo-provider or billing decisions are not prerequisites.
 
 **Deliverables:**
 
-- Event/team pit assignments, contributor-owned structured drafts, claims, units, revisions, notes, provenance, disagreements, and derived profile references.
+- Event/team pit assignments, contributor-owned structured drafts, compiled renderers for the season-selected Pit registry subset, claims, units, revisions, notes, provenance, disagreements, and derived profile references.
 - UID-partitioned IndexedDB draft/outbox and idempotent contribution/revision synchronization using Submission Integrity.
 - Purpose-specific Pit APIs enforcing assignment, event, ownership, package, capability/scope, validation, retention, and audit.
 - Clear separation of pit claims from match-observed verification.
@@ -179,7 +209,7 @@ These definitions are canonical. Each slice must satisfy its prerequisites, deli
 
 **Rollout and rollback:** Pilot structured Pit Scouting independently. Disable Pit writes while retaining local drafts/outbox; no photo infrastructure is involved.
 
-**Out of scope:** Firebase Storage, Blaze billing, photo uploads/processing/retention, automatic claim verification, and legacy Pit migration.
+**Out of scope:** Firebase Storage, Blaze billing, photo uploads/processing/retention, dedicated external photo/album links, automatic claim verification, and legacy Pit migration.
 
 **Exit criteria:** A Scout completes and synchronizes a structured contribution with zero photos; authorized users see attributable profile evidence and disagreement.
 
@@ -250,7 +280,7 @@ These definitions are canonical. Each slice must satisfy its prerequisites, deli
 
 **Exit criteria:** Authorized Administrators can govern identity, packages, retention, audit, export, and recovery through least-privilege, recently authenticated, fully audited workflows.
 
-Optional pit photos are not a prerequisite for Slice 5. If approved later, deliver them as a separately flagged extension after a storage-provider, billing, quota, retention, privacy, and accessibility review. Disabling photo uploads must never affect structured pit drafts or records.
+Optional pit photos are not a prerequisite for Slice 5. The reserved `photoIds` field is prohibited in MVP requests and canonical revisions and no dedicated external photo link is delivered. If photos are approved later, deliver them as a separately flagged extension after a storage-provider, billing, quota, retention, privacy, and accessibility review. Disabling photo uploads must never affect structured pit drafts or records.
 
 ## Cutover
 
@@ -271,20 +301,11 @@ This is a temporary approval surface and never replaces Product Requirements, an
 ### DR-016 — Scouting methods and staffing
 
 - **Existing authority:** ADRs 0005, 0006, 0011; method-validation protocol
-- **Recommendation:** keep capture and staffing interfaces configurable until measured validation is complete
+- **Recommendation:** keep observation-capture methods and staffing interfaces configurable until measured validation is complete; the approved simple timer and post-match issue flag are not open experiments
 - **Alternatives:** architecturally select defaults now
-- **Consequences:** final Match Mode controls wait for evidence
+- **Consequences:** final observation controls wait for evidence, while the approved timer baseline may proceed in Slice 4
 - **Security / offline / UX:** no special impact / all candidates remain offline-capable / avoids premature interaction lock-in
-- **Slices:** 4, 7; **PO required:** Scouting-lead approval; **Status:** Deferred to scouting-method validation
-
-### DR-017 — Optional pit photos
-
-- **Existing authority:** ADR 0009; pit contract
-- **Recommendation:** no MVP photo dependency; reconsider only after product-value and cost validation
-- **Alternatives:** required or optional MVP uploads
-- **Consequences:** no Firebase Storage or Blaze dependency in MVP
-- **Security / offline / UX:** no image risk / no blob queue / structured pit flow stays complete
-- **Slices:** later than 5; **PO required:** Later; **Status:** Deferred to a later delivery slice
+- **Slices:** 4, 7; **Approval required:** Lead Scout usability/staffing and Strategist usefulness/accuracy, with product approval where scope, staffing expectations, or complexity change; **Status:** Deferred to scouting-method validation
 
 ## Slice 0 entry criteria
 
@@ -297,7 +318,8 @@ Slice 0 may begin only after:
 5. Supported-device test inventory and isolated staging/production environment plan are identified.
 6. ADRs 0013 and 0014 and the Identity and Session and Authorization contracts remain internally consistent with their approved decisions and staged gates.
 7. The endpoint policy matrix, capability/scope vocabulary, permission source, session schema, same-UID reauthentication, revocation propagation, offline authorization recovery, audit schema, threat controls, and test gates are internally consistent and testable.
-8. No production implementation, dependency, deployment, or Firestore mutation begins without explicit implementation approval.
+8. The approved CCR-001 through CCR-003 decisions in the controlled-component [historical coverage review](../validation/controlled-component-registry-evidence.md#gap-resolutions-and-recommendations) remain incorporated into the Season Package contract, ADR 0005, and schema version 1 fixtures.
+9. No production implementation, dependency, deployment, or Firestore mutation begins without explicit implementation approval.
 
 Before Slice 1 begins, the approved Firebase verification/recovery flows must have configured authorized domains, templates, throttling, quota monitoring, and emulator/test fixtures. The approved session-duration, same-UID, account-switch, scope, claims, propagation, separate projection, and default-deny evaluator policies require contract fixtures; engineering must validate cookie/CSRF compatibility, browser session restoration, projection refresh/outage behavior, route-registry completeness, and propagation behavior. Assignment-specific refinements may remain deferred until Slice 3 only where they do not change the approved capability/scope model. Administration-only UI composition may remain deferred until Slice 8, but its capabilities, recent-auth rules, and audit requirements must be fixed before Slice 0 foundations.
 

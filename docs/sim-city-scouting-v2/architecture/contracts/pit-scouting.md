@@ -2,9 +2,9 @@
 
 | Metadata | Value |
 |---|---|
-| Status | Proposed |
+| Status | Approved with amendments |
 | Approval scope | Slice 5 |
-| Approved decisions | Photo-free structured MVP; optional photos deferred |
+| Approved decisions | Photo-free structured MVP; dedicated external photo links excluded; `photoIds` reserved but prohibited in MVP payloads; future extension deferred; CCR-001 through CCR-003 registry behavior |
 | Decision references | ADR 0009 |
 | Related contracts | [Submission Integrity](submission-integrity.md), [Assignment Model](assignment-model.md), [Season Package](season-package.md), [Offline Synchronization](offline-sync.md), [Authorization](authorization-contract.md) |
 
@@ -17,7 +17,7 @@ This contract governs contributor-owned structured Pit Scouting revisions and de
 Pit context is `(seasonKey, eventKey, teamNumber)`; match number is prohibited. Contributions remain distinct by contributor and revision.
 
 ```ts
-interface PitContributionRevision {
+interface PitRecord {
   contributionId: string;
   revision: number;
   seasonKey: string;
@@ -42,6 +42,7 @@ interface PitContributionRevision {
   repairability?: StructuredAnswer;
   driverExperience?: StructuredAnswer;
   notes?: string;
+  /** Reserved for a future approved extension; must be absent in MVP data. */
   photoIds?: string[];
   createdAt: string;
   finalizedAt: string;
@@ -50,7 +51,7 @@ interface PitContributionRevision {
 
 ## Data model
 
-The `PitContributionRevision` above is the immutable accepted contribution envelope. A separate derived profile references revisions rather than copying away provenance.
+The `PitRecord` above is the immutable accepted contribution envelope and declares `photoIds` only as a forward compatibility point. The current MVP runtime profile narrows this interface by requiring `photoIds` to be absent from requests and stored canonical revisions. A separate derived profile references revisions rather than copying away provenance.
 
 ## Lifecycle and invariants
 
@@ -68,7 +69,7 @@ Local draft becomes a finalized contribution revision only through a Submission 
 
 ## Validation rules
 
-Validate season/event/team, active or conflict-eligible assignment, package hash/questions, units/ranges, claim schema, notes, and contribution size.
+Validate season/event/team, active or conflict-eligible assignment, package hash/questions, controlled-component definition/payload pairs, units/ranges, claim schema, notes, and contribution size. Categorical actions and spatial actions follow CCR-001 and CCR-002 when a validated Pit method uses them. Claimed interview durations use `measurement` with a configured time unit and claim provenance; raw timer/cycle payload discriminators are invalid under CCR-003. The MVP rejects any present `photoIds` field, including an empty array, through `422 PIT_VALIDATION_FAILED` with a bounded field error. It does not ignore or strip the field because absent and empty are canonically distinct. No dedicated external photo/album URL field is accepted.
 
 ## Storage, indexes, and retention
 
@@ -113,7 +114,7 @@ Audit finalization, revision, conflict resolution, profile derivation version, a
 
 ## Optional photo extension
 
-MVP omits `photoIds` in requests and exposes no photo UI, local blob queue, provider, upload endpoint, processing, quota, billing, or retention dependency. The optional field is a future compatibility point only. A later approved extension must use blob/object storage rather than Firestore/JSON, remain independently disableable, and define cost, retention, validation, metadata stripping, descriptions, ownership, idempotency, offline behavior, and graceful failure.
+MVP requires `photoIds` to be absent from requests and canonical revisions and exposes no photo UI, dedicated external photo/album link, local blob queue, provider, upload endpoint, processing, quota, billing, or retention dependency. The optional interface field is a declaration-only future compatibility point and identifies no current resource. Clients do not solicit, fetch, preview, or render external media; notes remain plain text and do not become a photo-link workflow. A later approved extension must use blob/object storage rather than Firestore/JSON, remain independently disableable, and define identifier semantics, cost, retention, validation, metadata stripping, descriptions, ownership, idempotency, offline behavior, and graceful failure.
 
 ## Deferred decisions
 

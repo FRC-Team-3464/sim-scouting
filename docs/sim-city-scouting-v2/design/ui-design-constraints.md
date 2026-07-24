@@ -1,6 +1,6 @@
 # Sim-City Scouting v2 UI design constraints
 
-**Status:** Required constraints for UI design exploration and implementation handoff
+**Status:** Approved by product owner and principal architect; required for UI design exploration and implementation handoff
 
 ## Purpose and authority
 
@@ -72,8 +72,12 @@ Contracted sensitive operations require same-UID recent authentication while pre
 
 ### Match Scouting
 
-- Keep match identity, team, labeled alliance/station, current phase, monotonic timer state, latest action, local-persistence result, and undo/correction access visible during rapid capture.
-- Support assignment context confirmation, pre-match preparation, Auto and other configured match phases, active/inactive periods where the season package defines them, End Game, post-match review, action history, correction, queueing, and receipt confirmation.
+- Keep match identity, team, labeled alliance/station, current phase, device-local elapsed timer, latest action, local-persistence result, and undo/correction access visible during rapid capture.
+- Provide one large explicit Start Match action at the observed field cue. Advance Auto and other season-package-defined phases automatically. The MVP must not expose routine pause/resume, manual phase navigation, detailed clock-correction controls, or per-observation confidence prompts.
+- If timing was restored or the Scout believes timing or observations are incomplete, make that status clear and provide a simple post-match issue flag with an optional note. Do not silently rewrite original observations or imply that restored device timing is authoritative field time.
+- Support assignment context confirmation, pre-match preparation, configured match phases, active/inactive periods where the season package defines them, End Game, post-match review, action history, correction, queueing, and receipt confirmation.
+- Preserve the familiar multi-delta concept for high-throughput numeric observations: one prominent running total with rapid, reversible, package-configured adjustments. Treat the v1 screen as behavioral evidence, never as a visual template. V2 must explore improved hierarchy, grouping, responsive reflow, last-action/local-save feedback, accessible naming/announcement, invalid-adjustment prevention, and one-step undo while retaining one-tap capture.
+- Positive capture actions should be visually primary and corrections clearly distinguished without relying on color. Do not add confirmation dialogs to routine delta actions; immediate feedback and undo provide recovery. At narrow widths, reflow the total and adjustment groups without shrinking targets or requiring essential horizontal scrolling.
 - Corrections and undo must read as append/supersede/void actions, not silent destruction of accepted evidence.
 - Active capture stays pinned to the assignment and season-package version with which it began. A package refresh must not silently alter controls mid-match.
 - Zone or coordinate exploration must include an equally operable non-map alternative. Spatial controls must not be the only way to record or review an observation.
@@ -83,7 +87,7 @@ Contracted sensitive operations require same-UID recent authentication while pre
 - Key the workflow by season, event, and team; never request or display match number as Pit contribution identity.
 - Support structured answers, measurements with units, contributor-owned revisions, claims and confidence where configured, provenance, disagreements, review, local queueing, and receipt state.
 - Clearly distinguish a pit claim from match-observed verification.
-- The MVP flow must be complete with zero photo controls. Do not show upload affordances, placeholders that imply a required robot image, blob-queue state, storage-provider selection, photo quotas, or image-only evidence. `photoIds` is only a future compatibility point.
+- The MVP flow must be complete with zero photo controls. Do not show upload affordances, dedicated external photo/album link fields, previews, placeholders that imply a required robot image, blob-queue state, storage-provider selection, photo quotas, or image-only evidence. `photoIds` is only a declaration-level future compatibility point and must be absent from MVP requests and canonical revisions.
 
 ## Offline, synchronization, storage, and application updates
 
@@ -100,7 +104,10 @@ Contracted sensitive operations require same-UID recent authentication while pre
 
 - Season and event package states are `draft`, `published`, `superseded`, `retired`, and `revoked`. Draft content is unavailable to capture; published content is immutable; superseded content remains valid for pinned work; retired content is unavailable for new work; revoked content blocks new work and sends affected offline submissions to review.
 - Event data uses TBA as the sole external source. Show TBA provenance, freshness, and any narrow reasoned Lead Scout override without inventing a multi-provider reconciliation workflow or disguising an override as imported source data.
-- Capture controls come from the approved, controlled component registry. A design must not require arbitrary executable forms, remote HTML/script/style, or a generic plugin builder.
+- Capture controls come from the approved [controlled component registry](../architecture/contracts/season-package.md#controlled-component-registry). Each observation may use a different allow-listed kind; the multi-delta counter is not universal. Design the unanswered, answered, not-observed, not-applicable, invalid, disabled, review, and correction states applicable to each kind without redefining its payload or interaction model. A design must not require arbitrary executable forms, remote HTML/script/style, or a generic plugin builder.
+- A categorical append action must make each activation visibly append one configured option; it has no preselected value and must not look or behave like a replaceable segmented choice. Correction remains an explicit append-oriented undo, supersede, or void operation.
+- A zone or coordinate action must collect one configured action option and one location as a single evidence event. Its keyboard/screen-reader non-map alternative must collect the same pair rather than a reduced meaning.
+- A renderer may provide familiar start, stop, or lap-like affordances only over contracted actions or state transitions. It must persist the underlying event promptly and present elapsed or cycle values as derived feedback; a displayed timer total is never the submitted raw payload.
 - Administrator publication/revocation and Lead Scout event overrides require the correct separated workspace, explicit target/version, mandatory confirmation, non-empty reason, current authorization, recent authentication where contracted, and an auditable outcome.
 - Strategy and Lead Scout evidence views must expose provenance, contributing revisions, disagreement, uncertainty/confidence, algorithm version, and freshness. Failed or stale derived data must not invalidate or obscure accepted raw evidence.
 - Ordinary Scouts must not see live leaderboards, peer raw records, or derived qualification summaries. Post-qualification summaries unlock for Scouts only after explicit Lead Scout closure, not merely after a scheduled final qualification match.
@@ -119,12 +126,10 @@ Contracted sensitive operations require same-UID recent authentication while pre
 
 ## Decisions UI design must not lock before validation
 
-- Exact, batch/volley, made/missed, cycle, interval-rate, or quantity-range capture as a universal default
-- Batch sizes, accuracy/quantity buckets, cycle linkage, or interval duration
+- Made/missed, cycle, interval-rate, or quantity-range capture as a universal addition to the approved high-throughput multi-delta baseline
+- Multi-delta preset sizes, accuracy/quantity buckets, cycle linkage, or interval duration
 - Zones, coordinates, or non-spatial controls as the universal spatial default for every observation
-- Timer-driven versus manual phase navigation and correction presentation
 - Rating anchors and scale presentation
-- Session, exception-only, or per-observation confidence prompts
 - Dedicated, reduced, roaming, or specialist staffing layouts
 - Phone/tablet control density beyond the supported-device and accessibility constraints above
 
