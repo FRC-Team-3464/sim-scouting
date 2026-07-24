@@ -1,6 +1,6 @@
 # ADR 0003 — Assignment model
 
-**Status:** Proposed
+**Status:** Approved with amendments by product owner
 
 ## Context
 
@@ -8,7 +8,7 @@ Current scouts manually choose context, producing coverage gaps and wrong-team r
 
 ## Decision
 
-Assignments are server-owned, event-scoped records with type, subject, assignee, station, lifecycle state, version, provenance, and audit history. Match assignment states are `planned`, `available`, `accepted`, `in_progress`, `completed`, `missed`, `cancelled`, or `reassigned`. Clients download versioned assignment projections for offline use. Mutations use expected-version preconditions. Manual fallback creates a visibly flagged emergency assignment proposal that the server validates and audits.
+Assignments are server-owned, event-scoped records with type, subject, assignee, station, lifecycle state, version, provenance, and audit history. Match assignment states are `planned`, `available`, `accepted`, `in_progress`, `completed`, `missed`, `cancelled`, or `reassigned`. Clients download versioned assignment projections for offline use. Mutations use expected-version preconditions. A Scout without an active assignment is read-only. Only a Lead Scout may create or approve a visibly flagged emergency assignment. Valid formerly assigned submissions preserve attribution and receive a conflict flag for Lead Scout review instead of being discarded.
 
 ## Alternatives considered
 

@@ -1,6 +1,6 @@
 # ADR 0012 — Deployment and operational model
 
-**Status:** Proposed
+**Status:** Approved by product owner and principal architect
 
 ## Context
 
@@ -8,7 +8,7 @@ The application currently deploys a same-origin Vite SPA and Express Vercel Func
 
 ## Decision
 
-Retain same-origin Vercel for initial v2. Keep synchronous APIs bounded and move long imports, consensus, and cleanup to resumable jobs or external workflow execution if they exceed request lifetimes. Keep scouting JSON below a conservative 1 MiB envelope. Add structured request IDs, safe error categories, audit events, health/readiness checks, backup/export procedures, environment isolation, CI gates, and deployment smoke tests. Service-worker assets use content hashes and an explicit update lifecycle. Optional image processing and object-storage uploads remain outside MVP and require a later operational decision.
+Retain same-origin Vercel for initial v2. Keep synchronous APIs bounded and move long imports, consensus, exports, and cleanup to resumable jobs or external workflow execution if they exceed request lifetimes. Keep scouting JSON below a conservative 1 MiB envelope. Add structured request IDs, safe redacted error categories, audit events, health/readiness checks, alerts, tested backup/export procedures, environment isolation, CI gates, and deployment smoke tests. Recovery targets are RPO no greater than 30 minutes and RTO no greater than one hour during an event. Retain event and audit records for 14 days after event end. Lead Scouts, Strategists, and Administrators may request identifiable scout-level exports; Scouts may not. Service-worker assets use content hashes and an explicit safe update lifecycle. Optional image processing and object-storage uploads remain outside MVP and require a later operational decision.
 
 ## Alternatives considered
 

@@ -1,57 +1,114 @@
-# Roles and permissions contract
+# Roles and Permissions contract
 
-**Status:** Proposed
+| Metadata | Value |
+|---|---|
+| Status | Approved with amendments |
+| Approval scope | Slices 0–8 |
+| Primary implementation slice | Slice 0 role/capability foundation; membership integration in Slice 1; administration UX in Slice 8 |
+| Proposed extensions | ADR 0014 capability/scope and propagation details require approval |
+| Decision references | ADR 0010, ADR 0014 |
+| Related contracts | [Authorization](authorization-contract.md), [Identity and Session](identity-session-contract.md), all purpose-specific domain contracts |
 
-## Source of truth
+## Purpose and scope
 
-Server-controlled team membership records are authoritative. Firebase custom claims may cache a small membership/permission version but are not the complete mutable policy. `debug` is excluded from authorization. Every request is authenticated, resolved to current membership, checked by capability middleware, and audited when privileged.
+This contract governs membership lifecycle and approved role baselines. Roles organize UX; the Authorization contract owns the normalized vocabulary, scoped grants, projections, and backend policy evaluation. The Identity and Session contract owns the public session.
 
-## Initial roles and capabilities
+## Identity and terminology
 
-| Capability | Scout | Pit scout | Lead | Strategist | Admin |
-|---|:---:|:---:|:---:|:---:|:---:|
-| Read own assignments/submissions | ✓ | ✓ | ✓ |  | ✓ |
-| Submit assigned match records | ✓ |  | ✓ |  | ✓ |
-| Submit pit contributions |  | ✓ | ✓ |  | ✓ |
-| Read cross-scout records/consensus |  |  | ✓ | ✓ | ✓ |
-| Manage assignments/conflicts |  |  | ✓ |  | ✓ |
-| Import/override event data |  |  | ✓ |  | ✓ |
-| Publish season packages |  |  |  |  | ✓ |
-| Correct/void finalized records |  |  | ✓ |  | ✓ |
-| Manage users, roles, exports, audit |  |  |  |  | ✓ |
+Server-controlled team memberships are authoritative. Firebase custom claims may cache a small authorization-version hint but never replace current membership resolution.
 
-This is a recommended starting map requiring product-owner approval. Capabilities, not role names, appear in endpoint policy. Drive-team viewer can be a read-only strategist membership if a distinct role is needed.
-
-## Schema and lifecycle
+## Data model
 
 ```ts
 interface TeamMembership {
-  membershipId: string; teamNumber: number; uid: string;
-  roles: string[]; capabilityOverrides: {allow: string[]; deny: string[]};
-  status: "invited" | "active" | "suspended" | "revoked";
-  permissionVersion: number; createdAt: string; updatedAt: string;
+  membershipId: string;
+  teamNumber: number;
+  uid: string;
+  roles: string[];
+  state: "invited" | "active" | "suspended" | "revoked";
+  authorizationVersion: number;
+  createdAt: string;
+  updatedAt: string;
 }
 ```
 
-- **Authoritative/server-only:** UID, team, status, effective capabilities, versions, actor/timestamps.
-- **Client-authored:** invitation acceptance and authorized change request.
-- **Derived:** effective capability set and session summary.
-- **Local-only:** cached display labels; never used to authorize sync.
-- Index by team/status, UID/status, and permission version. Audit permission changes for the governance retention period. Membership max 32 KiB and capability names are allow-listed.
+Capability grants and denies are separate bounded records using `CapabilityGrant` from the Authorization contract. This prevents one membership document from growing with event-scoped policy.
+
+## Role baseline
+
+| Capability | Scout | Lead Scout | Strategist | Administrator |
+|---|:---:|:---:|:---:|:---:|
+| Read own assignments/submissions | ✓ | ✓ | If separately Scout | Read records |
+| Submit assigned match/pit work | ✓ | If assigned | If separately Scout |  |
+| Read peer records/consensus |  | ✓ | ✓ | ✓ |
+| Read live cross-scout analytics |  | ✓ | ✓ | ✓ |
+| Read derived summaries during qualifications |  | ✓ | ✓ | ✓ |
+| Read summaries after Lead closes qualifications | ✓ | ✓ | ✓ | ✓ |
+| Manage assignments/conflicts/emergency coverage |  | ✓ |  |  |
+| Override event data |  | ✓ |  |  |
+| Correct/void records |  | ✓ |  |  |
+| Publish/revoke season packages |  |  |  | ✓ |
+| Manage membership/retention/recovery/audit |  |  |  | ✓ |
+| Request identifiable export |  | ✓ | ✓ | ✓ |
+
+Match and pit capture are separately grantable. Administrator record access is routine read-only and does not imply event mutation. `debug`, UI routes, cached capabilities, and device IDs authorize nothing.
+
+## Lifecycle and invariants
+
+Public registration creates no membership. An Administrator may create or activate membership only after the backend confirms the Firebase identity's email is verified; verification never creates membership or grants a role automatically. Activation normally assigns Scout, while elevated roles require explicit audited assignment. Invitations, if introduced for administration convenience, become active under the same verification rule. Suspension/revocation denies new requests immediately after authoritative lookup and triggers session revocation or reauthentication. Every policy mutation increments `authorizationVersion`. Deny overrides allow. A Scout without active assignment is read-only. The server-owned `qualification_collection_closed` event state gates Scout summaries; Lead Scout closure/reopen requires reason/audit.
+
+## Trust and ownership boundaries
+
+| Category | Fields |
+|---|---|
+| Client-authored | Invitation acceptance and authorized change request |
+| Server-authoritative | UID/team/state, effective capabilities, version, actor/time |
+| Derived | Effective capability set and safe session summary |
+| Local-only | Display labels; never authorization |
+| Server-internal | Policy evaluation/cache state |
+
+## Validation rules
+
+Validate actor capability, allowed role vocabulary, target Firebase UID, current server-confirmed `emailVerified`, target team, expected authorization version, reason, and last-Administrator safeguards. Reject membership activation for an unverified identity even if the client or Administrator claims verification. Capability/scope validation follows the Authorization contract.
+
+## Storage, indexes, and retention
+
+Index team/state, UID/state, and authorization version. Membership max is 32 KiB. Retain authorization audit through 14 days after applicable event end or longer while membership governance requires.
+
+## Capabilities and security
+
+The role baseline above compiles into allow-listed, scoped capabilities. Deny overrides allow. Every request applies the Authorization contract. Role names, frontend routes, custom claims, and `debug` never substitute for authoritative evaluation.
 
 ## API
 
-- `GET /api/auth/session` adds safe team/role display and `permissionVersion` after implementation.
-- `GET /api/scouting/v2/admin/memberships?teamNumber=&cursor=`
-- `POST /api/scouting/v2/admin/memberships`
-- `PATCH /api/scouting/v2/admin/memberships/:id`
+| Method | Endpoint | Capability | Idempotent | Offline queued | Purpose |
+|---|---|---|:---:|:---:|---|
+| GET | `/api/scouting/v2/auth/session` | authenticated | N/A | No | Return safe roles and authorization version |
+| GET | `/api/scouting/v2/admin/memberships?teamNumber=&cursor=` | `scouting.users.read` | N/A | No | Page memberships |
+| POST | `/api/scouting/v2/admin/memberships` | `scouting.users.manage` | Yes | No | Create/invite membership |
+| PATCH | `/api/scouting/v2/admin/memberships/:id` | `scouting.users.manage` or `scouting.roles.manage` | Yes | No | Versioned identity/role/state change |
 
-Change request: `{"expectedVersion":3,"roles":["scouting_lead"],"reason":"Event lead"}`. Success: `200 {"membershipId":"mem_1","permissionVersion":4}`.
+Every purpose-specific endpoint declares required capabilities and uses deny-by-default middleware after authentication/CSRF. Cached session summaries drive display only; sync is reauthorized.
 
-Validation: `422 {"error":{"code":"ROLE_INVALID","message":"Membership change is invalid","retryable":false}}`
-Authentication: `401 {"error":{"code":"AUTHENTICATION_REQUIRED","message":"Log in to continue","retryable":true}}`
-Authorization: `403 {"error":{"code":"PERMISSION_DENIED","message":"You cannot manage memberships","retryable":false}}`
-Conflict: `409 {"error":{"code":"MEMBERSHIP_VERSION_CONFLICT","message":"Membership changed","retryable":false,"details":{"currentVersion":4}}}`
-Retry: `503 {"error":{"code":"PERMISSION_SERVICE_UNAVAILABLE","message":"Change was not confirmed","retryable":true,"retryAfterSeconds":5}}`
+## Errors
 
-Role changes revoke sessions or require immediate reauthentication so stale claims do not retain privilege.
+| HTTP | Code | Retryable | Client action |
+|---:|---|:---:|---|
+| 401 | `AUTHENTICATION_REQUIRED` | Yes | Reauthenticate |
+| 403 | `CAPABILITY_DENIED` or `SCOPE_DENIED` | No | Hide/disable action after authoritative denial |
+| 409 | `AUTHORIZATION_VERSION_STALE` | Yes | Refresh session/projection and policy |
+| 422 | `EMAIL_VERIFICATION_REQUIRED` | No | Keep membership inactive and direct the user to Firebase verification resend |
+| 422 | `ROLE_OR_CAPABILITY_INVALID` | No | Correct request |
+| 503 | `AUTHORIZATION_UNAVAILABLE` | Yes | Do not assume permission; retry |
+
+## Offline and reconciliation
+
+Offline capability displays are hints. Capture may continue within downloaded assignment policy as authorization pending; server reauthorizes upload. Removal or disablement retains same-UID work in an authorization-rejected state and never permits another user to upload it.
+
+## Audit, observability, performance, and accessibility
+
+Audit actor, target, roles/capabilities, activation/suspension state, reason, versions, request ID, and time. Do not copy verification links or action codes into audit. Cache bounded summaries without weakening revocation. Denial messages are clear but do not reveal protected data.
+
+## Deferred decisions
+
+Product approval remains required for ADR 0014's normalized capability vocabulary, separate scoped projection, and authorization-pending offline behavior. Multi-team tenancy requires a future amendment. Scouting-method staffing does not change capability enforcement.

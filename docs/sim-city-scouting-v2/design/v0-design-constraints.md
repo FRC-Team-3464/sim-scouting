@@ -22,7 +22,7 @@ V0 may explore visual direction and repository-aware prototypes. Generated code 
 
 ## Must represent
 
-Assignment queue, pre-match scheduled and manual fallback, Auto, active/inactive periods, End Game, post-match review, action history/undo, local/queued/uploading/synced/rejected/conflict/auth-required/storage/update states, lead data-quality review, and structured Pit Scouting that remains complete with no photo controls.
+Assignment queue, pre-match scheduled and manual fallback, Auto, active/inactive periods, End Game, post-match review, action history/undo, local/queued/authorization-pending/uploading/synced/authorization-rejected/validation-rejected/conflict/auth-required/storage/update states, same-user reauthentication versus explicit account switching, lead data-quality review, and structured Pit Scouting that remains complete with no photo controls.
 
 ## Must not lock before validation
 
@@ -37,4 +37,4 @@ Assignment queue, pre-match scheduled and manual fallback, Auto, active/inactive
 
 ## Architecture-risk warnings
 
-Reject designs that require direct Firestore, assume background sync, store sync state in canonical records, require online launch, require pit photos, show an MVP photo-upload flow, put images in scouting JSON, hide assignment/version conflict, use `debug` as privilege, silently merge scouts, or imply legacy compatibility.
+Reject designs that require direct Firestore, assume background sync, store sync state in canonical records, require online launch, require pit photos, show an MVP photo-upload flow, put images in scouting JSON, hide assignment/version/authorization conflict, use `debug` as privilege, treat cached capabilities as authority, let another UID reauthenticate or upload retained work, silently merge scouts, or imply legacy compatibility.

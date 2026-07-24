@@ -14,3 +14,5 @@ ADRs are proposed until product-owner and engineering review marks them accepted
 10. [Roles and permissions](0010-roles-and-permissions.md)
 11. [Consensus and data quality](0011-consensus-and-data-quality.md)
 12. [Deployment and operations](0012-deployment-and-operational-model.md)
+13. [Authentication, session, and shared-device identity](0013-authentication-session-and-shared-device-identity.md)
+14. [Capability, scope, and policy enforcement](0014-capability-scope-and-policy-enforcement.md)

@@ -1,6 +1,6 @@
 # ADR 0010 — Roles and permissions
 
-**Status:** Proposed
+**Status:** Approved with amendments by product owner
 
 ## Context
 
@@ -8,7 +8,7 @@ Authentication exists, but `debug` and frontend visibility are not authorization
 
 ## Decision
 
-Use backend-enforced capabilities sourced from server-controlled user/team membership records and optionally summarized in verified custom claims. Initial capabilities cover own assignments/submissions, pit contributions, cross-scout reads, strategy reads, assignment management, event import/override, season publication, correction/void, conflict resolution, user/role management, export, and audit. Middleware checks capabilities per purpose-specific endpoint. Firestore remains inaccessible to browsers.
+Use backend-enforced capabilities sourced from server-controlled user/team membership records. User-facing roles are Scout, Lead Scout, Strategist, and Administrator; match and pit capture are capabilities rather than separate security roles. A Scout writes only through an active assignment and cannot read peer records, live cross-scout analytics, leaderboards, or derived team summaries during qualification collection. A Lead Scout manages event assignments, overrides, conflicts, and audited corrections but cannot publish packages or change technical configuration. A Strategist reads finalized cross-scout evidence and analytics but cannot mutate scouting data. An Administrator is technical: it manages memberships, package governance, retention, exports, audit, and recovery; it may routinely read scouting records but cannot operate assignments or modify scouting records by default. Middleware checks capabilities per purpose-specific endpoint. Firestore remains inaccessible to browsers and `debug` grants nothing. ADR 0014 proposes the normalized capability vocabulary, typed scopes, Firestore grant authority, limited custom-claim hints, and propagation rules needed to implement this approved role separation.
 
 ## Alternatives considered
 
@@ -28,4 +28,4 @@ Capabilities allow role evolution and least privilege. Claim changes require ses
 
 ## Deferred work and validation
 
-Product owner must approve role-to-capability mapping and personal-record visibility. Revisit if multi-team tenancy is introduced.
+Product-owner and principal-architect approval of ADR 0014 remains required before implementing its vocabulary, scope, projection, propagation, offline-authorization, and denial matrix. Engineering must implement the approved qualification-collection release state. Revisit if multi-team tenancy is introduced.

@@ -1,6 +1,6 @@
 # ADR 0008 — IndexedDB outbox and synchronization
 
-**Status:** Proposed
+**Status:** Approved by product owner and principal architect
 
 ## Context
 
@@ -8,7 +8,7 @@ LocalStorage lacks transactions, blobs, migrations, and durable sync state.
 
 ## Decision
 
-Use versioned IndexedDB stores for metadata, preferences, season/event packages, assignments, captures, observations, drafts, outbox, attempts, receipts, pit records, and quarantine. A transactional local action updates capture data and outbox intent together. Foreground sync is authoritative; optional background sync may wake it but does not own business rules. Retry transient failures with capped exponential backoff and jitter. Authentication expiry pauses entries for in-place login. Validation failures are quarantined; conflicts require explicit resolution.
+Use versioned IndexedDB stores for metadata, preferences, season/event packages, assignments, captures, observations, drafts, outbox, attempts, receipts, pit records, and quarantine, partitioned by authenticated UID where user-owned. No device registration is required; a random installation ID is local by default and may be reported only for bounded diagnostics. Foreground sync is authoritative; optional background sync may wake it but does not own business rules. Retry transient failures with capped exponential backoff and jitter. Authentication expiry always retains work and pauses entries for same-UID in-place login. Explicit sign-out with unsynchronized work offers retain, confirmed discard, or cancel. Synchronized records retain locally for seven days, subject to earlier quota cleanup. Validation and authorization rejections are distinct; neither deletes unsynchronized evidence, and conflicts require explicit resolution. A different UID cannot satisfy reauthentication or upload retained work.
 
 ## Alternatives considered
 

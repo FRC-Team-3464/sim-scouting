@@ -42,3 +42,19 @@ Select the least burdensome method meeting the strategy-use accuracy threshold. 
 ## V0 constraints until completion
 
 V0 must show configurable alternatives and must not lock batch sizes, attempts, zones, coordinate density, timer controls, ratings, staffing, or confidence prompts into a final visual system.
+
+## Architectural interfaces that remain configurable
+
+Until results are approved, season packages and capture contracts must preserve configuration points for:
+
+- observation/component type and action payload schema;
+- exact, batch/volley, made/missed, cycle, interval-rate, and range capture;
+- batch sizes, range buckets, attempt outcomes, cycle link IDs, and interval duration;
+- spatial mode per observation, zone definitions, coordinate enablement/precision, and a non-map alternative;
+- phase/timer presentation, start/pause/resume/override/correction audit events, and manual navigation;
+- rating anchors, scale version, and `not_observed` behavior;
+- session, exception-only, or per-observation confidence;
+- assignment types for dedicated, reduced, roaming, and specialist staffing; and
+- responsive composition, orientation, and control density for phone and tablet.
+
+Architecture may bound and validate these interfaces but must not select empirical defaults. The published season-package version/hash records whichever validated configuration is active.

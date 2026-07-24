@@ -1,6 +1,6 @@
 # Sim-City Scouting v2 product requirements
 
-**Status:** Proposed canonical product scope
+**Status:** Approved by product owner
 
 ## Product goal
 
@@ -8,12 +8,83 @@ Provide an assignment-driven, offline-first FRC scouting system that lets scouts
 
 ## Users and workspaces
 
-- **Scout:** complete match and pit assignments with minimal manual context entry.
-- **Strategy:** inspect team evidence, trends, agreement, and confidence.
-- **Event management:** manage assignments, coverage, conflicts, and data quality.
-- **Administration:** manage capabilities, season packages, retention, audit, and exports.
+The product has four role-aware workspaces. A user may have access to more than one workspace, but backend capabilities—not navigation visibility—authorize every operation. All workspaces share authenticated team/event context, package freshness, offline status, and accessible navigation.
 
-The Scout workspace is the first delivery priority. Other workspaces may initially expose only the capabilities needed to operate it safely.
+### Scout workspace
+
+**Primary users:** Scouts and Lead Scouts when personally assigned to capture.
+
+**Purpose:** Complete attributable match and structured pit assignments quickly, accurately, and offline with minimal manual context entry.
+
+**Responsibilities:**
+
+- view and accept the user's active assignments;
+- confirm server-provided event, match, station, and team context;
+- capture, review, correct, and locally persist observations;
+- submit through the outbox and inspect the user's own receipts, conflicts, and sync status; and
+- resume retained work after same-user reauthentication.
+
+An ordinary Scout cannot browse peer raw records, live cross-scout analytics, live team leaderboards, or qualification-period derived summaries. A Scout without an active assignment is read-only. The Scout workspace is the first user-facing delivery priority.
+
+### Strategy workspace
+
+**Primary users:** Strategists and authorized Lead Scouts.
+
+**Purpose:** Turn finalized scouting evidence into explainable team evaluation and match-planning information without changing source observations.
+
+**Responsibilities:**
+
+- inspect finalized cross-scout records, provenance, disagreement, and confidence;
+- compare team profiles and derived metrics;
+- view versioned consensus only when sufficient validated evidence exists; and
+- request authorized exports for further analysis.
+
+Strategy access is read-only for scouting evidence. It cannot correct records, resolve assignment conflicts, publish packages, or present unvalidated predictions as fact. Full Strategy delivery follows validated capture and sufficient event data.
+
+### Event Management workspace
+
+**Primary users:** Lead Scouts.
+
+**Purpose:** Operate scouting coverage and data quality during an event without exposing technical administration controls.
+
+**Responsibilities:**
+
+- manage rosters, availability, assignments, reassignment, intentional duplicate coverage, and emergency assignments;
+- monitor missing coverage, stale work, rejected submissions, conflicts, and synchronization problems;
+- review peer evidence and perform audited correction, void, and conflict-resolution workflows;
+- apply narrow, reasoned event-data overrides; and
+- explicitly close or reopen qualification collection with an audit reason.
+
+This workspace cannot publish season packages, manage deployment/server configuration, change retention or backup policy, or administer technical secrets.
+
+### Administration workspace
+
+**Primary users:** Administrators.
+
+**Purpose:** Provide technical governance without becoming the normal event-operations interface.
+
+**Responsibilities:**
+
+- manage memberships, roles, and capability policy;
+- draft, publish, supersede, retire, revoke, and roll back season packages;
+- manage retention, audited exports, backup/recovery status, and system governance;
+- inspect audit history, operational health, and read-only scouting records for support; and
+- manage environment-safe administrative settings exposed by approved contracts.
+
+Administrators do not manage assignments, resolve event conflicts, or modify scouting records by default. Administration is online-first; destructive or privileged operations require confirmation, reason, current authorization, and audit.
+
+Other workspaces may initially expose only the minimum capabilities required to operate the Scout workspace safely. Strategy, Event Management, and Administration functionality expands through their corresponding delivery slices.
+
+## Account access and recovery
+
+- Public email/password registration is allowed and creates a Firebase identity with zero application roles, capabilities, team memberships, or event scopes.
+- Firebase sends and handles the email-verification action. Email verification is required before an Administrator may activate team membership and normally grant the Scout role.
+- Lead Scout, Strategist, and Administrator access is always an explicit, audited role assignment; public registration never grants elevated access.
+- A registered user without active membership sees a pending/no-access state rather than a protected workspace.
+- Firebase owns the password-reset email and hosted reset action. The application provides only a thin request/status surface, returns a non-enumerating response, and does not introduce SMTP, custom password storage, or an application-managed reset form.
+- Verification resend and password-reset initiation are rate-limited and monitored against Firebase no-cost quotas. Quota exhaustion fails safely and does not weaken verification requirements.
+- Ordinary sign-out resolves the current user's unsynchronized-work choice and clears authentication only from the current browser. Scout self-service all-device sign-out is outside the approved product scope and is not a planned backlog item.
+- Administrators and operations retain a separate, audited account-suspension and emergency session-revocation capability for lost devices or compromised accounts. This incident-response control is not exposed as an ordinary Scout sign-out option.
 
 ## Product principles
 
@@ -46,6 +117,8 @@ If photos are later approved, their rollout requires an explicit storage/cost de
 - Authentication expiry pauses synchronization and supports in-place reauthentication without deleting work.
 - Conflicts, validation failures, stale packages, storage pressure, and app updates remain visible and actionable.
 - A service worker caches shell/static assets; foreground application code owns business synchronization.
+- Shared-device mode partitions local work by authenticated UID. Explicit sign-out offers retain or discard when unsynchronized work exists; session expiry always retains work for same-user reauthentication.
+- Synchronized local records are retained for seven days and may be cleaned earlier under storage pressure.
 
 ## Quality requirements
 
@@ -53,6 +126,7 @@ If photos are later approved, their rollout requires an explicit storage/cost de
 - Primary capture actions provide visible acknowledgement within 100 ms on representative lower-powered devices.
 - Payloads and downloaded resources are bounded, versioned, validated, and recoverable.
 - Security acceptance includes authorization denial tests, CSRF/session regression tests, safe logs, audit events, and environment isolation.
+- MVP supports current Android, iOS, iPadOS, Windows, ChromeOS, and macOS releases plus the three immediately preceding major OS versions; representative smartphones, tablets, Chromebooks, Windows laptops, and MacBooks must pass acceptance testing.
 
 ## Out of scope for MVP
 

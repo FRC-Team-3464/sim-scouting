@@ -1,6 +1,6 @@
 # ADR 0007 — Submission atomicity and revisions
 
-**Status:** Proposed
+**Status:** Approved by product owner and principal architect
 
 ## Context
 
