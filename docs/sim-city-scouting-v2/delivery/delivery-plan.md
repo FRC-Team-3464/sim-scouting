@@ -56,7 +56,7 @@ Season-specific labels, deltas, range buckets, choices, anchors, units, zones, c
 ### Recommended registry sequence
 
 1. **Complete — close the architectural vocabulary.** CCR-001 through CCR-003 are approved and incorporated into the allow-listed kinds, definition and payload shapes, resource references, bounds, answer states, accessibility ownership, compatibility, and extension rules in the Season Package contract.
-2. **Explore compiled renderers.** Design every relevant state on representative supported form factors using the approved behavior. Design may recommend a contract amendment but cannot create package-defined UI behavior.
+2. **Explore compiled renderers.** Use the current [V0 controlled-component design handoff](../prompts/v0-component-design-handoff.md) to design every relevant state on representative supported form factors using approved behavior and explicitly illustrative configuration. Design may recommend a contract amendment but cannot create package-defined UI behavior or a final season form.
 3. **Validate each observation empirically.** Begin with the strategy decision, select the least burdensome existing kind/configuration, test it against ground truth, and record the Lead Scout, Strategist, product, engineering, and accessibility outcomes required by the validation protocol.
 4. **Resolve future gaps before implementation.** Simplify or remove a field that fails validation. If a genuinely necessary need has no approved kind, pause that field and approve an ADR/contract amendment and compatible registry version before implementation; do not hide the gap in package JSON or a prototype.
 5. **Make the contract executable in Slice 0.** Implement shared runtime validators, canonical fixtures, compatibility checks, and cross-runtime tests for every approved definition and payload.
@@ -301,11 +301,11 @@ This is a temporary approval surface and never replaces Product Requirements, an
 ### DR-016 — Scouting methods and staffing
 
 - **Existing authority:** ADRs 0005, 0006, 0011; method-validation protocol
-- **Recommendation:** keep observation-capture methods and staffing interfaces configurable until measured validation is complete; the approved simple timer and post-match issue flag are not open experiments
+- **Recommendation:** use the approved scouting-method validation protocol and keep observation-capture methods and staffing interfaces configurable until measured validation is complete; the approved simple timer and post-match issue flag are not open experiments
 - **Alternatives:** architecturally select defaults now
 - **Consequences:** final observation controls wait for evidence, while the approved timer baseline may proceed in Slice 4
 - **Security / offline / UX:** no special impact / all candidates remain offline-capable / avoids premature interaction lock-in
-- **Slices:** 4, 7; **Approval required:** Lead Scout usability/staffing and Strategist usefulness/accuracy, with product approval where scope, staffing expectations, or complexity change; **Status:** Deferred to scouting-method validation
+- **Slices:** 4, 7; **Approval required:** Lead Scout usability/staffing and Strategist usefulness/accuracy, with product approval where scope, staffing expectations, or complexity change; **Status:** Validation protocol approved; season-specific method and staffing outcomes deferred to measured validation
 
 ## Slice 0 entry criteria
 

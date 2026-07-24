@@ -1,6 +1,6 @@
 # Scouting method validation
 
-**Status:** Proposed empirical validation protocol; architectural constraints are approved. Run the applicable validation before finalizing season-specific observation methods, staffing assumptions, and publishable package configuration.
+**Status:** Approved by product owner and principal architect on 2026-07-24. Run the applicable validation before finalizing season-specific observation methods, staffing assumptions, and publishable package configuration.
 
 ## Registry dependency and decision ownership
 

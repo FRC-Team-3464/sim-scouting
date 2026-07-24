@@ -12,6 +12,10 @@ This folder contains the canonical product and architecture documentation for th
 6. [UI design constraints](design/ui-design-constraints.md)
 7. [Delivery plan](delivery/delivery-plan.md)
 
+## Current design handoff
+
+Use the [V0 controlled-component design handoff](prompts/v0-component-design-handoff.md) for the current neutral component-catalog and Match/Pit workflow exploration. It is an execution prompt, not a source of product or architecture authority; the canonical documents linked above remain controlling.
+
 ## Source-of-truth rules
 
 | Content | Canonical location |

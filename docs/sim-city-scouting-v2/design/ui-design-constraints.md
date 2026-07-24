@@ -115,6 +115,79 @@ Contracted sensitive operations require same-UID recent authentication while pre
 - Export and recovery operations are online, requester-bound, status-driven, and potentially asynchronous. Show the explicit environment and target where the operation can affect data. Do not imply an export is immediately available or that a backup/recovery action succeeded before authoritative job evidence exists. Where retention is displayed, event records, receipts, and audit history retain through 14 days after event end unless an approved incident/legal hold suspends cleanup.
 - Administration operational-status designs must distinguish application liveness from dependency readiness and expose actionable job backlog, backup age, and restore-test evidence where available. Breaches of the event recovery objectives—no more than 30 minutes of synchronized-data loss and no more than one hour to restore service—must be unmistakable without relying on color alone.
 
+## Compiled registry component design brief
+
+This section defines the required design exploration for the compiled registry renderers. It translates the normative [Season Package component contract](../architecture/contracts/season-package.md#controlled-component-registry) into platform-independent interaction and handoff constraints; it does not repeat or replace the configuration and payload schemas.
+
+Prototype content must be clearly labeled illustrative. It may demonstrate realistic Match and Pit uses but must not be presented as an approved season field, option set, delta preset, range, zone map, rating anchor, staffing model, or published package. One compiled renderer may have responsive or density variants, but every variant must preserve the same contracted evidence meaning.
+
+### Shared component states and behavior
+
+Every applicable component exploration must show:
+
+- label, supporting description, required-at-review treatment, and phase/applicability context without relying on layout position alone;
+- `unanswered`, answered, locally persisted, invalid, disabled/unavailable, `not_observed`, and `not_applicable` states, with only the dispositions enabled by the observation definition;
+- the distinction between a replaceable draft response and an append-oriented action, including appropriate latest-action, history, undo, supersede, or void feedback;
+- immediate visible local-persistence acknowledgement, independent synchronization state, and no implication that a tap performs one network request or is already server-accepted;
+- keyboard, screen-reader, touch, reduced-motion, 200% zoom, and 320 CSS-pixel behavior, including visible focus and programmatic error association;
+- long but contract-valid labels, descriptions, options, units, and errors so wrapping and reflow are tested rather than assumed;
+- disabled behavior caused by phase, bounds, assignment, package, or workflow state without presenting the reason as server-authorization authority; and
+- review and correction presentation that preserves the pinned component meaning and original evidence.
+
+No component may default unanswered data to zero, `false`, the first option, an empty selection, or an initial claim. Where the contract requires explicit zero/no-action confirmation at review, the renderer must distinguish that confirmation from merely having no interaction history.
+
+### Required component explorations
+
+| Registry kind | Required interaction and evidence behavior | Required prototype states and variants |
+|---|---|---|
+| `action_button` | Each activation appends one action. The control must not resemble a persistent on/off value. Provide immediate acknowledgement without modal confirmation or live-region flooding. | Ready, pressed/local-save acknowledgement, latest action, repeated rapid actions, undo/correction, disabled, and review history. |
+| `categorical_action` | Each activation appends exactly one configured option. Options remain identifiable and have no preselected or replaceable selected state. | Two-option and many-option layouts, rapid repeated and alternating actions, latest option, correction, disabled option/control, and narrow-screen reflow. |
+| `multi_delta_counter` | Show one prominent total derived from append-oriented configured deltas. Positive and negative actions remain distinguishable without color alone; invalid bounds are unavailable and undo is separate from a negative scoring action. | Zero-unconfirmed, explicit-zero review, nonzero total, last delta/local save, minimum/maximum bound, asymmetric delta sets, rapid input, undo, error, and phone/tablet/laptop layouts. |
+| `range_selector` | Store one replaceable inclusive range option. Display both bounds in text and do not imply false precision or preselect a range. | Unanswered, selected, changed draft selection, long/many ranges, `not_observed` where enabled, validation error, and review. |
+| `binary_choice` | Present two explicit unselected choices using configured labels. Do not use a default-off switch or treat unanswered as `false`. | Unanswered, explicit true, explicit false, changed draft choice, long labels, disabled, validation error, and review. |
+| `segmented_choice` | Store one replaceable configured option. It must read as a current response, not an append-action history. The compiled renderer may use segments, radio controls, or a chooser according to option count and device. | Unanswered, selected, changed selection, two and many options, overflow/reflow, disabled, error, and review. |
+| `state_machine` | Show the current state and only valid configured transitions. Each transition appends evidence; elapsed duration is derived. Terminal state and restoration must be unmistakable without silently changing history. | Initial, active, multiple legal transitions, terminal, restored, invalid/stale transition recovery, derived duration feedback, correction, and review timeline. |
+| `checklist` | Store a replaceable set of unique configured options within minimum/maximum bounds. Make selection count and constraints understandable; prevent or explain exceeding the maximum. | Unanswered, partial, minimum met, maximum reached, changed draft selection, explicit confirmed-empty where permitted, long list, disabled, error, and review. |
+| `anchored_rating` | Present behavioral anchor descriptions, not an unexplained number or decorative star score. Store the selected anchor and preserve `not_observed` as a distinct disposition where enabled. | Unanswered, each anchor extreme, middle anchor, changed rating, long descriptions, `not_observed`, disabled, error, and review. |
+| `measurement` | Capture a bounded decimal value and one configured unit. Preserve valid in-progress editing, show precision/bounds inline, and never expose binary floating-point artifacts. | Empty, partial edit, valid integer/decimal, unit selection/change, minimum/maximum, precision/range error, negative value where valid, disabled, and review. |
+| `zone_action` | Each activation appends one action-option and allowed-zone pair. The discrete field representation and its non-visual/list interaction must produce the same pair and identify alliance/orientation textually. | Action-first and zone-first exploration, one and many action options, selected/invalid zone, repeated events, mirrored orientation, non-map alternative, correction, and review history. |
+| `coordinate_action` | Each activation appends one action option with a normalized coordinate. The configured non-map alternative must capture equivalent action/location meaning; the map is never the only operable or reviewable representation. | Action-first and location-first exploration, precise and coarse input, keyboard/screen-reader alternative, out-of-bounds prevention, repeated events, orientation, correction, and textual review. |
+| `note` | Capture bounded plain text as a replaceable response. Show length limits and preserve line breaks where configured without turning notes into executable content, structured data, or an external-media workflow. | Empty/unanswered, single and multiline, near/at limit, validation error, disabled, changed draft, review, and safe wrapping of URL-like text without preview or embed. |
+
+### Timer, cycle, and composite behavior
+
+`timer`, `stopwatch`, and `cycle_timer` are not registry kinds and must not appear as independent component cards in the design catalog. Where a tested workflow benefits from start, stop, or lap-like affordances, annotate the underlying `state_machine`, `action_button`, `categorical_action`, or spatial action events. Present durations and cycles as derived feedback, never as replacement raw evidence.
+
+At least one Match capture composition must demonstrate mixed component kinds, the explicit Start Match action, automatic phase progression, latest-action/local-save feedback, correction access, offline state, and post-match review without implying that every season uses every kind. At least one Pit composition must demonstrate structured questions, measurements with units, claims/provenance, bounded notes, review, and zero photo dependency.
+
+### Responsive and accessibility design matrix
+
+The component catalog and both composite flows must cover, at minimum:
+
+| Form factor | Required exploration |
+|---|---|
+| Narrow smartphone | 320 CSS-pixel reflow, portrait capture, 200% zoom, safe areas, large touch targets, long labels, and no essential horizontal scrolling |
+| Smartphone landscape | Reduced height, keyboard appearance, persistent match context, and rapid controls without obscuring status or undo |
+| Tablet | Touch-first portrait and landscape composition, increased context without changing evidence semantics, and split views only where focus order remains coherent |
+| Laptop/Chromebook/MacBook | Full keyboard operation, visible focus, no hover dependency, screen-reader order, and sensible density without making pointer precision mandatory |
+
+Every spatial design includes a complete text/list alternative. Every rapid-action design documents restrained announcements. Every component with options demonstrates long labels and non-color selection/error indicators. Component behavior must remain usable when haptics, animation, network access, and background synchronization are unavailable.
+
+### Design handoff requirements
+
+The design handoff must:
+
+1. identify each artifact by registry `kind` and `componentSchemaVersion`;
+2. label all sample fields and values as illustrative or identify the approved validation result that selected them;
+3. annotate append action versus replaceable draft semantics, local persistence acknowledgement, synchronization status, correction behavior, and answer-state handling;
+4. map component and composite states to the owning contract rather than invent payloads in design annotations;
+5. record responsive, keyboard, screen-reader, reduced-motion, zoom, and non-map behavior;
+6. list empirical questions that remain for the approved scouting-method validation protocol;
+7. separate visual recommendations from contract requirements and identify any proposed contract amendment explicitly; and
+8. avoid treating generated HTML, CSS, framework code, or a V0 project as approved production implementation.
+
+Design exploration is complete only when every registry kind and shared state has an annotated representative design, the Match and Pit composites satisfy the matrix above, and unresolved empirical selections are traceable to validation rather than silently fixed by the mockup.
+
 ## Accessibility, interaction, and content
 
 - Meet WCAG 2.2 AA and test complete workflows with keyboard, screen reader, reduced motion, 200% zoom, and 320 CSS-pixel reflow.
@@ -131,12 +204,12 @@ Contracted sensitive operations require same-UID recent authentication while pre
 - Zones, coordinates, or non-spatial controls as the universal spatial default for every observation
 - Rating anchors and scale presentation
 - Dedicated, reduced, roaming, or specialist staffing layouts
-- Phone/tablet control density beyond the supported-device and accessibility constraints above
+- Supported-device control density beyond the responsive and accessibility constraints above
 
 Design explorations must show genuinely configurable alternatives for the method under study. They must not make a visually polished candidate look architecturally selected before the validation protocol and Lead Scout review approve it.
 
 ## Design rejection criteria
 
-Reject a design or generated implementation that requires direct browser-to-Firestore access, caches authenticated API responses in the service worker, assumes background sync will run, stores local synchronization state in canonical records, requires online launch or capture, equates upload completion with synchronization, hides package/assignment/authorization conflicts, uses `debug`, role labels, routes, device identity, or cached grants as authority, permits cross-UID recovery, silently merges Scout evidence, implies legacy-data compatibility, requires Pit photos, or places deployment/server configuration in the Lead Scout workflow.
+Reject a design or generated implementation that requires direct browser-to-Firestore access, caches authenticated API responses in the service worker, assumes background sync will run, stores local synchronization state in canonical records, requires online launch or capture, equates upload completion with synchronization, hides package/assignment/authorization conflicts, uses `debug`, role labels, routes, device identity, or cached grants as authority, permits cross-UID recovery, silently merges Scout evidence, implies legacy-data compatibility, requires Pit photos, places deployment/server configuration in the Lead Scout workflow, invents a component kind or payload, treats append actions as replaceable answers, defaults unanswered values, omits required non-map behavior, or presents derived timer/cycle values as raw evidence.
 
 Before design approval, trace each represented action and state to Product Requirements and its owning contract, confirm that deferred empirical choices remain visibly configurable, and test the relevant workflow across the supported devices and accessibility modes.
