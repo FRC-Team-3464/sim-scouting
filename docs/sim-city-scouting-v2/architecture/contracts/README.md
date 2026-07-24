@@ -93,3 +93,5 @@ Exports are asynchronous, encrypted in transit, short-lived, requester-bound, an
 8. Empirical capture choices remain configurable until validation.
 9. Identity and Session owns authentication; Authorization owns permission decisions.
 10. Offline capture authority is provisional until the server reauthorizes synchronization.
+11. The bounded identity/session response excludes dynamic scoped grants; the separately fetched authorization projection composes UX but never authorizes an API.
+12. Every protected endpoint has one runtime-validated policy declaration and passes through the reusable ordered default-deny evaluator; missing or invalid declarations fail closed.

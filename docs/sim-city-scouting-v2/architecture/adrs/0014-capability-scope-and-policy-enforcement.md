@@ -1,6 +1,8 @@
 # ADR 0014 — Capability, scope, and policy enforcement
 
-**Status:** Proposed for product-owner and principal-architect approval
+**Status:** Approved by product owner and principal architect
+
+**Approved decisions:** Allow-listed `scouting.<resource>.<action>` capability vocabulary; typed `global`, `season`, `event`, `team`, `assignment`, and `own` scopes; Firestore membership and grant records as the canonical authorization source; custom claims limited to compact slowly changing hints and never authorization; authorization-version propagation with authoritative checks for sensitive operations, synchronization, and version mismatch; bounded identity/session response with dynamic scoped grants fetched separately; reusable ordered default-deny evaluator with mandatory endpoint policy declarations; ordinary grant changes without automatic logout; suspension/security revocation behavior; authorization-pending offline capture; bounded redacted authorization audit; staged security test gates
 
 ## Context
 
@@ -17,6 +19,8 @@ Capability names use the `scouting.<resource>.<action>` convention. A grant comb
 The base session exposes identity, role labels, global UX hints, and authorization version. Dynamic scoped grants use a separately fetched authorization projection. Browser projections are non-authoritative. Backend evaluation order is authentication, CSRF for mutation, current authorization, capability, scope, ownership/assignment, resource state, recent authentication, then audit.
 
 Offline permission is separated into local capture, local queue, attempted submission, and server acceptance. Cached authority may permit clearly marked local capture against a downloaded assignment, but synchronization always reauthorizes. Permission removal, disablement, or stale grants never delete queued evidence: same-UID work moves to an authorization-required/rejected state for later retry, Lead Scout review, or audited recovery. Another UID cannot upload or read it.
+
+Ordinary role or grant changes increment `authorizationVersion` and take effect through authoritative backend evaluation without automatically terminating the Firebase session. Membership suspension or revocation, lost-device response, or suspected compromise may revoke sessions. Unsynchronized evidence remains attributable to and partitioned under the original UID and is never silently transferred.
 
 ## Alternatives considered
 
@@ -36,4 +40,4 @@ Central policy evaluation provides least privilege, explicit scope, and testable
 
 ## Deferred work and validation
 
-Product owner must approve the normalized vocabulary, separate scoped-grant projection, and authorization-pending offline behavior. Engineering must establish cache duration from measured load, implement version invalidation, and test every endpoint policy row, role change, stale version, outage, and recovery path before production writes.
+No product-owner or principal-architect approval remains open in this ADR. Engineering must establish cache duration from measured load, implement version invalidation, validate audit volume/retention, and pass the staged endpoint-policy, role-change, stale-version, outage, offline-recovery, and shared-device gates before production writes.

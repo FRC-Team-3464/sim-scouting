@@ -2,10 +2,10 @@
 
 | Metadata | Value |
 |---|---|
-| Status | Proposed |
+| Status | Approved |
 | Approval scope | Slices 0–8 |
 | Primary implementation slice | Slice 1; runtime schemas and fixtures begin in Slice 0 |
-| Approved decisions | Public registration with zero privileges; mandatory Firebase-managed verification before membership activation; Firebase-managed password recovery; resource-oriented verification and reset request endpoints; current-browser logout only; separate Administrator/operations emergency revocation |
+| Approved decisions | Firebase/Node/HttpOnly-session/CSRF reuse through versioned v2 endpoints; bounded versioned public identity/session projection with dynamic scoped grants fetched separately; same-UID reauthentication and explicit account switch; public registration with zero privileges; mandatory Firebase-managed verification before membership activation; Firebase-managed password recovery; resource-oriented verification and reset request endpoints; retain/discard/cancel unsynchronized-work handling; current-browser logout only; separate Administrator/operations emergency revocation; six-hour absolute session, 30-minute warning, explicit renewal, no live-capture idle timeout; 15-minute server-authoritative recent authentication |
 | Decision references | ADR 0013, ADR 0008 |
 | Related contracts | [Authorization](authorization-contract.md), [Offline Synchronization](offline-sync.md), [Roles and Permissions](roles-permissions.md) |
 
@@ -45,6 +45,21 @@ All fields are server-authoritative. `roles` and `globalCapabilityHints` are bou
 
 Maximum encoded response size is 16 KiB. Responses use `Cache-Control: no-store`; the browser retains the current projection in memory and refreshes it after authentication, authorization-version change, visibility/reconnect signals, or authoritative denial.
 
+### Session and authorization-projection separation
+
+`PublicSessionV2` answers only who is authenticated, the safe role/global-hint summary, the current authorization version, and session/freshness timing. It never embeds event-, team-, assignment-, season-, or ownership-scoped grants. Those dynamic grants are fetched from `GET /api/scouting/v2/authorization` under the [Authorization contract](authorization-contract.md).
+
+The client restoration sequence is normative:
+
+1. Fetch and validate `PublicSessionV2`.
+2. Clear any in-memory identity or authorization state whose UID does not match the returned UID.
+3. Fetch and validate the scoped authorization projection for that same UID.
+4. Require its `authorizationVersion` to equal the session version; on mismatch, refresh both once and otherwise enter an explicit authorization-refresh/unavailable state.
+5. Use the projection only to compose UX and determine whether local offline capture may be shown as authorization pending.
+6. Treat every backend response as authoritative; a displayed action never proves permission.
+
+Session restoration may succeed while projection loading fails. In that case, the user remains authenticated but protected navigation and server mutations fail closed. Existing UID-owned offline evidence remains available only under its offline privacy and recovery rules. A projection refresh never renews the six-hour session.
+
 ## Lifecycle and invariants
 
 - Registration creates a Firebase identity but no application authorization and requests one Firebase-managed verification email.
@@ -52,9 +67,11 @@ Maximum encoded response size is 16 KiB. Responses use `Cache-Control: no-store`
 - Login replaces the session cookie, clears CSRF bindings, and returns a complete session projection.
 - Reauthentication for an active capture, retained work, or request replay must match the expected UID.
 - A different UID requires account switch; it cannot satisfy same-user reauthentication.
-- The session has absolute expiry. The proposed default is six hours with warning 30 minutes before expiry.
+- The session has a six-hour absolute expiry with warning 30 minutes before expiry; it does not roll forward silently.
 - Warning is non-blocking for active capture. Expiry pauses protected network operations and retains local work.
-- Logout clears local browser authentication and CSRF cookies. Account-wide sign-out separately revokes Firebase refresh tokens.
+- There is no automatic inactivity timeout during live capture. Renewal requires explicit successful reauthentication.
+- Logout clears only the current browser's authentication and CSRF cookies. Administrator/operations emergency revocation is a separate incident-response control; Scout self-service all-device sign-out does not exist.
+- Ordinary role/grant changes update authorization without automatically ending the Firebase session. Membership suspension/revocation or a security incident may revoke sessions; unsynchronized work remains under the original UID.
 - Disabled, deleted, expired, or revoked sessions fail verification and return `401`.
 
 ## Trust and ownership boundaries
@@ -79,7 +96,9 @@ Firebase Authentication owns credentials and session validity. The application s
 
 ## Capabilities and security
 
-Authentication endpoints do not accept client roles or capabilities. `POST /reauthenticate` requires the same CSRF protection as login and validates `expectedUid` when supplied. Account-wide revocation requires `scouting.identity.sessions_revoke` or self-service ownership plus recent authentication. Server authorization remains mandatory after authentication.
+Authentication endpoints do not accept client roles or capabilities. `POST /reauthenticate` requires the same CSRF protection as login and validates `expectedUid` when supplied. Administrator/operations emergency revocation requires its narrow capability, no-more-than-15-minute credential age, reason, and audit; it is not a self-service sign-out operation. Server authorization remains mandatory after authentication.
+
+Recent authentication is calculated by the backend from `authenticatedAt`, not from the expiry-warning state or a frontend route guard. The maximum age is 15 minutes for role changes, package publication, event overrides, correction or voiding of another Scout's evidence, identifiable exports, audit access, emergency revocation, and destructive cleanup. Active capture is never freshness-gated.
 
 Cookie requirements are HttpOnly, host-only, path `/`, environment-validated `Secure`, and approved `SameSite`. CSRF uses the signed double-submit token bound to the private session/pre-auth cookie plus exact configured Origin checks. Authentication transitions invalidate the readable CSRF token.
 
@@ -202,4 +221,4 @@ Audit successful login/logout, failed-login category/count, reauthentication, UI
 
 ## Deferred decisions
 
-Product owner must still approve six-hour duration/30-minute warning, the proposed 15-minute recent-authentication window, and idle-timeout policy. Engineering must validate Firebase authorized domains, templates, action return URLs, resend/reset throttles, no-cost quota monitoring, and the administrator/operations emergency-revocation procedure before Slice 1 acceptance. Self-service all-device logout is explicitly out of scope.
+Engineering must validate Firebase authorized domains, templates, action return URLs, resend/reset throttles, no-cost quota monitoring, clock-skew behavior at freshness/expiry boundaries, and the administrator/operations emergency-revocation procedure before Slice 1 acceptance. Self-service all-device logout is explicitly out of scope. No product-owner or principal-architect approval remains open in this contract.

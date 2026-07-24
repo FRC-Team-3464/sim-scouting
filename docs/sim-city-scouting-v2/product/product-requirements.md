@@ -85,6 +85,10 @@ Other workspaces may initially expose only the minimum capabilities required to 
 - Verification resend and password-reset initiation are rate-limited and monitored against Firebase no-cost quotas. Quota exhaustion fails safely and does not weaken verification requirements.
 - Ordinary sign-out resolves the current user's unsynchronized-work choice and clears authentication only from the current browser. Scout self-service all-device sign-out is outside the approved product scope and is not a planned backlog item.
 - Administrators and operations retain a separate, audited account-suspension and emergency session-revocation capability for lost devices or compromised accounts. This incident-response control is not exposed as an ordinary Scout sign-out option.
+- Reauthentication that resumes retained work or retries a request must authenticate the same Firebase UID. Using a different account requires an explicit account switch that first resolves the current UID's unsynchronized work and never exposes or uploads it as the new user.
+- Ordinary role or grant changes take effect through current backend authorization without automatically signing the user out. Membership suspension/revocation, lost-device response, or suspected compromise may revoke sessions. Unsynchronized evidence remains under its original UID and is never transferred or reattributed silently.
+- An authenticated session has a six-hour absolute lifetime and warns 30 minutes before expiry. Renewal requires explicit reauthentication; there is no rolling renewal or automatic inactivity timeout during live capture, and the warning does not interrupt active capture.
+- For contracted privileged operations, recent authentication means the backend-confirmed `authenticatedAt` is no more than 15 minutes old. Role changes, package publication, event overrides, correction or voiding of another Scout's evidence, identifiable exports, audit access, emergency revocation, and destructive cleanup require this check. Ordinary active capture never requires a freshness interruption.
 
 ## Product principles
 
@@ -94,6 +98,7 @@ Other workspaces may initially expose only the minimum capabilities required to 
 - All capture saves locally first and displays an explicit sync state. Only a server receipt means synchronized.
 - Match records use event-aware identities, idempotent submission, and auditable corrections.
 - Purpose-specific backend APIs enforce capabilities. Browser code never accesses Firestore directly.
+- A separately fetched scoped authorization projection may compose workspaces and actions, but stale or missing client state never grants server access; every protected API independently evaluates current backend policy and undeclared endpoints deny by default.
 - Accessibility and offline recovery are acceptance criteria, not follow-up polish.
 
 ## Match scouting
@@ -119,6 +124,7 @@ If photos are later approved, their rollout requires an explicit storage/cost de
 - A service worker caches shell/static assets; foreground application code owns business synchronization.
 - Shared-device mode partitions local work by authenticated UID. Explicit sign-out offers retain or discard when unsynchronized work exists; session expiry always retains work for same-user reauthentication.
 - Synchronized local records are retained for seven days and may be cleaned earlier under storage pressure.
+- Previously downloaded assignments may continue local capture as `authorization_pending` when current authority cannot be checked. Reconnection always reauthorizes; rejection preserves the original UID's evidence and only a server receipt means synchronized.
 
 ## Quality requirements
 

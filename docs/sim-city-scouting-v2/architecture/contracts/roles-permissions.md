@@ -5,7 +5,7 @@
 | Status | Approved with amendments |
 | Approval scope | Slices 0–8 |
 | Primary implementation slice | Slice 0 role/capability foundation; membership integration in Slice 1; administration UX in Slice 8 |
-| Proposed extensions | ADR 0014 capability/scope and propagation details require approval |
+| Approved extensions | ADR 0014 capability, scope, authority, claims, propagation, projection, evaluator, role-change/revocation, offline-authorization, audit, and staged test-gate details |
 | Decision references | ADR 0010, ADR 0014 |
 | Related contracts | [Authorization](authorization-contract.md), [Identity and Session](identity-session-contract.md), all purpose-specific domain contracts |
 
@@ -55,7 +55,7 @@ Match and pit capture are separately grantable. Administrator record access is r
 
 ## Lifecycle and invariants
 
-Public registration creates no membership. An Administrator may create or activate membership only after the backend confirms the Firebase identity's email is verified; verification never creates membership or grants a role automatically. Activation normally assigns Scout, while elevated roles require explicit audited assignment. Invitations, if introduced for administration convenience, become active under the same verification rule. Suspension/revocation denies new requests immediately after authoritative lookup and triggers session revocation or reauthentication. Every policy mutation increments `authorizationVersion`. Deny overrides allow. A Scout without active assignment is read-only. The server-owned `qualification_collection_closed` event state gates Scout summaries; Lead Scout closure/reopen requires reason/audit.
+Public registration creates no membership. An Administrator may create or activate membership only after the backend confirms the Firebase identity's email is verified; verification never creates membership or grants a role automatically. Activation normally assigns Scout, while elevated roles require explicit audited assignment. Invitations, if introduced for administration convenience, become active under the same verification rule. Every policy mutation increments `authorizationVersion`. Ordinary role/grant changes take effect through authoritative backend checks without automatically ending the Firebase session. Membership suspension/revocation, lost-device response, or suspected compromise denies application access and may revoke sessions. Unsynchronized evidence remains under its original UID and is never transferred silently. Deny overrides allow. A Scout without active assignment is read-only. The server-owned `qualification_collection_closed` event state gates Scout summaries; Lead Scout closure/reopen requires reason/audit.
 
 ## Trust and ownership boundaries
 
@@ -111,4 +111,4 @@ Audit actor, target, roles/capabilities, activation/suspension state, reason, ve
 
 ## Deferred decisions
 
-Product approval remains required for ADR 0014's normalized capability vocabulary, separate scoped projection, and authorization-pending offline behavior. Multi-team tenancy requires a future amendment. Scouting-method staffing does not change capability enforcement.
+No product-owner or principal-architect approval remains open for ADR 0014. Multi-team tenancy requires a future amendment. Scouting-method staffing does not change capability enforcement. Engineering evidence remains required under the Authorization contract's staged gates.

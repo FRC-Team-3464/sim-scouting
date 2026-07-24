@@ -39,9 +39,9 @@ Thresholds are starting recommendations and require scouting-lead approval befor
 
 Select the least burdensome method meeting the strategy-use accuracy threshold. If no method passes, simplify the metric or remove it. Publish raw anonymized results, adjudication rules, device/browser versions, and the resulting season-package decision. Do not generalize one game element’s result to all elements.
 
-## V0 constraints until completion
+## UI design constraints until completion
 
-V0 must show configurable alternatives and must not lock batch sizes, attempts, zones, coordinate density, timer controls, ratings, staffing, or confidence prompts into a final visual system.
+Every design exploration, regardless of tool, must show configurable alternatives and must not lock batch sizes, attempts, zones, coordinate density, timer controls, ratings, staffing, or confidence prompts into a final visual system. See the platform-independent [UI design constraints](../design/ui-design-constraints.md).
 
 ## Architectural interfaces that remain configurable
 

@@ -1,6 +1,6 @@
 # Sim-City Scouting v2 delivery plan
 
-**Status:** Delivery sequence approved through Slice 3; authentication/authorization closure additions remain proposed and implementation is not authorized by this document
+**Status:** Delivery sequence and authentication/authorization architecture approved through their documented scopes; implementation is not authorized by this document
 
 ## Delivery policy
 
@@ -76,12 +76,12 @@ These definitions are canonical. Each slice must satisfy its prerequisites, deli
 
 - Installable PWA manifest and content-hashed shell/static caching; authenticated API responses are never service-worker cached.
 - `/api/scouting/v2/auth/*` endpoints for CSRF, public zero-privilege registration, verification resend, Firebase-managed recovery initiation, login, session v2, same-UID reauthentication, and current-browser logout.
-- Frontend session v2 validation, startup restoration, warning/expiry behavior, account switch, and compatible structured error handling.
+- Frontend session v2 validation, startup restoration, approved six-hour expiry and 30-minute warning behavior, explicit renewal, no live-capture inactivity timeout, account switch, and compatible structured error handling.
 - Authoritative membership/grant resolution, scoped authorization projection, authorization-version propagation, bounded cache/fail-closed behavior, and initial route/API policy enforcement.
 - UID-partitioned IndexedDB foundation, retain/discard/cancel sign-out inventory, automatic-expiry retention, seven-day synchronized-record policy, migration journal, quota status, and recovery shell.
 - Waiting service-worker update lifecycle that never reloads or migrates during active work.
 
-**Security and test gates:** Cookie/CSRF regression; zero-privilege registration; unverified-membership activation denial; verification resend throttling/quota failure; non-enumerating reset response; Firebase hosted action/authorized return domain; same-UID mismatch; expired/revoked/disabled user; wrong Origin; stale authorization version; cross-user local isolation; direct API denial; current-browser logout and administrator/operations emergency revocation; `debug` denial invariant.
+**Security and test gates:** Cookie/CSRF regression; zero-privilege registration; unverified-membership activation denial; verification resend throttling/quota failure; non-enumerating reset response; Firebase hosted action/authorized return domain; same-UID mismatch; six-hour expiry/30-minute warning and 15-minute recent-authentication clock boundaries; no freshness interruption during active capture; expired/revoked/disabled user; wrong Origin; stale authorization version; cross-user local isolation; direct API denial; current-browser logout and administrator/operations emergency revocation; `debug` denial invariant.
 
 **Offline, performance, and accessibility:** Installed shell opens offline into an accurate authentication-required or retained-work state. Define shell bundle/start budgets. Navigation, dialogs, focus restoration, status semantics, zoom, keyboard, screen reader, and reduced-motion behavior pass.
 
@@ -286,30 +286,6 @@ This is a temporary approval surface and never replaces Product Requirements, an
 - **Security / offline / UX:** no image risk / no blob queue / structured pit flow stays complete
 - **Slices:** later than 5; **PO required:** Later; **Status:** Deferred to a later delivery slice
 
-## Authentication and authorization closure register
-
-This temporary register is the focused approval surface for unresolved parts of ADRs 0013–0014 and their contracts. It does not override the cited authority. “PO decision” states the exact approval still needed. Approved entries must pass the repository-wide [approval-closure review](../README.md#approval-closure-and-temporary-review-material), be incorporated into every appropriate canonical owner, and then be removed; an approved row is not retained merely as history. Remove this section when no unresolved entries remain.
-
-| ID | Topic and authority | Recommendation / alternatives | Security, offline, and UX impact | Slices | PO decision | Status |
-|---|---|---|---|---|---|---|
-| AA-01 | Existing authentication reuse — ADR 0013; Identity/Session | Reuse Firebase identity, Node exchange, HttpOnly session, revocation checks, signed CSRF, and exact Origin behind new `/api/scouting/v2/auth/*` endpoints. Alternative: retain unversioned public paths or replace the security boundary. | Preserves tested controls while giving v2 one clean namespace; no offline login; coordinated client/server cutover. | 0–1 | Approve reuse through the versioned v2 namespace. | Proposed |
-| AA-02 | Authentication extensions — ADR 0013; Identity/Session | Add session v2, same-UID reauthentication, explicit account switch, and credential age. Alternative: current identity/timing response only. Administrator/operations emergency revocation remains a separate incident-response control, not Scout all-device logout. | Prevents cross-user replay; preserves offline work; adds explicit switch/freshness UX. | 0–1 | Approve extensions. | Proposed |
-| AA-03 | Session duration/renewal — ADR 0013 | Keep six-hour absolute duration, warn at 30 minutes, explicit renewal, no live-capture idle timeout. Alternatives: shorter duration, rolling or idle expiry. | Limits session window without interrupting matches; offline expiry pauses sync. | 0–1 | Approve or amend duration/warning/idle policy. | Proposed |
-| AA-04 | Fresh-session semantics — ADR 0013 | Use server `authenticatedAt`, not warning state; active capture is never freshness-gated. Alternative: route-only warning gate. | Real credential-age control; avoids match interruption; clearer prompt. | 0–8 | Approve credential-age model. | Proposed |
-| AA-06 | Capability vocabulary — ADR 0014; Authorization | Use allow-listed `scouting.<resource>.<action>` vocabulary in contract. Alternative: current mixed names or role checks. | Default-deny and testable; cached names remain hints; consistent UX. | 0–8 | Approve vocabulary. | Proposed |
-| AA-07 | Scope model — ADR 0014; Authorization | Typed global, season, event, team, assignment, and own scopes. Alternative: event IDs embedded ad hoc in roles. | Blocks cross-scope access; supports downloaded assignments; explains denials. | 0–8 | Approve typed scopes. | Proposed |
-| AA-08 | Permission source of truth — ADR 0014 | Firestore membership/grants are canonical. Alternatives: custom claims only or client state. | Auditable dynamic policy; server lookup needed; offline grants provisional. | 0–8 | Approve Firestore authority. | Proposed |
-| AA-09 | Custom-claim usage — ADR 0014 | Store only compact authorization-version hint and feature-only `debug`. Alternative: dynamic grants in claims. | Avoids stale/oversized claims; no offline authority; invisible to ordinary UX. | 0–1 | Approve limited claims. | Proposed |
-| AA-10 | Authorization propagation — ADR 0014 | Increment version on every change; sensitive/sync/version-mismatch checks use current authority; bounded cache otherwise. Alternative: wait for session expiry. | Faster revocation; stale offline capture preserved but sync denied; refresh states required. | 0–8 | Approve propagation rule. | Proposed |
-| AA-11 | Public session contract — Identity/Session | Versioned identity, roles/global hints, auth version, credential and expiry times; dynamic scopes fetched separately. Alternative: embed every grant. | Bounded/privacy-aware; offline retains last projection; one additional projection request. | 0–1 | Approve separate scoped projection. | Proposed |
-| AA-12 | Backend policy enforcement — ADR 0014; Authorization | Reusable ordered evaluator and mandatory endpoint declarations. Alternative: scattered middleware/role checks. | Prevents frontend-only bypass; fails closed; consistent errors. | 0–8 | Approve enforcement model. | Proposed |
-| AA-15 | Role change/revocation — ADRs 0013–0014 | Increment version, revoke/re-authenticate, recheck sync, retain rejected evidence. Alternative: wait for expiry/delete work. | Prompt revocation without destructive loss; recovery status required. | 0–8 | Approve behavior. | Proposed |
-| AA-16 | Offline authorization — ADR 0014; Authorization | Permit downloaded-assignment capture as authorization pending; server acceptance always current. Alternative: block all offline capture when projection is stale. | Preserves field evidence while denying stale server access; explicit pending/rejected UX. | 0–6 | Approve recommendation. | Proposed |
-| AA-18 | Logout/unsynchronized work — ADRs 0008/0013 | Retain/discard/cancel; timeout retains; only same UID resumes; different UID uses account switch. Alternative: automatic purge or cross-user recovery. | Prevents deletion and cross-user upload; adds inventory/confirmation. | 0–5 | Approve same-UID/account-switch refinement; base policy is already approved. | Proposed |
-| AA-19 | Sensitive-operation reauthentication — ADR 0013; Authorization | Proposed 15-minute credential age for role changes, publication, overrides, others' correction/void, exports, audit, revocation, destructive cleanup. Alternatives: none or per-route warning threshold. | Limits stolen-session impact; online-only privileged prompt; no capture interruption. | 0–8 | Approve or amend window and operation list. | Proposed |
-| AA-20 | Authorization audit — Authorization contract | Audit policy changes, sensitive reads/actions, emergency/correction/publication/export/cleanup with bounded diffs and redaction. Alternative: platform logs only. | Investigation and accountability; no offline audit authority; reason prompts. | 0–8 | Approve event set and fields. | Proposed |
-| AA-21 | Authentication/authorization test gates — both contracts | Unit, API, emulator, browser, and end-to-end denial/revocation/offline/shared-device gates. Alternative: rely on current auth tests. | Prevents regression and direct-API bypass; exercises offline recovery; adds CI work. | 0–8 | Approve as Slice 0 gate. | Proposed |
-
 ## Slice 0 entry criteria
 
 Slice 0 may begin only after:
@@ -319,11 +295,11 @@ Slice 0 may begin only after:
 3. Engineering owners, implementation plans, and acceptance evidence are identified for canonical hashing, PWA cache ownership, application updates, IndexedDB migration/recovery, offline reconciliation, and logging/observability; implementation occurs in the owning slices, and any architectural change requires an amended decision before scaffolding diverges.
 4. Canonical hashing test-vector requirements, receipt lifecycle, capability vocabulary, shared-device boundaries, and recovery objectives are testable.
 5. Supported-device test inventory and isolated staging/production environment plan are identified.
-6. ADRs 0013 and 0014, the Identity and Session contract, the Authorization contract, and every remaining item in the authentication/authorization closure register are approved or approved with amendments.
+6. ADRs 0013 and 0014 and the Identity and Session and Authorization contracts remain internally consistent with their approved decisions and staged gates.
 7. The endpoint policy matrix, capability/scope vocabulary, permission source, session schema, same-UID reauthentication, revocation propagation, offline authorization recovery, audit schema, threat controls, and test gates are internally consistent and testable.
 8. No production implementation, dependency, deployment, or Firestore mutation begins without explicit implementation approval.
 
-Before Slice 1 begins, the approved Firebase verification/recovery flows must have configured authorized domains, templates, throttling, quota monitoring, and emulator/test fixtures. Session duration, cookie/CSRF compatibility, account switching, browser session restoration, authorization projection, propagation, and fail-closed membership resolution must be approved. Assignment-specific refinements may remain deferred until Slice 3 only where they do not change the approved capability/scope model. Administration-only UI composition may remain deferred until Slice 8, but its capabilities, recent-auth rules, and audit requirements must be fixed before Slice 0 foundations.
+Before Slice 1 begins, the approved Firebase verification/recovery flows must have configured authorized domains, templates, throttling, quota monitoring, and emulator/test fixtures. The approved session-duration, same-UID, account-switch, scope, claims, propagation, separate projection, and default-deny evaluator policies require contract fixtures; engineering must validate cookie/CSRF compatibility, browser session restoration, projection refresh/outage behavior, route-registry completeness, and propagation behavior. Assignment-specific refinements may remain deferred until Slice 3 only where they do not change the approved capability/scope model. Administration-only UI composition may remain deferred until Slice 8, but its capabilities, recent-auth rules, and audit requirements must be fixed before Slice 0 foundations.
 
 ### Slice 0 security exit criteria
 

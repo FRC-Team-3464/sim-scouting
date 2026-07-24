@@ -2,9 +2,10 @@
 
 | Metadata | Value |
 |---|---|
-| Status | Proposed |
+| Status | Approved |
 | Approval scope | Slices 0–8 |
 | Primary implementation slice | Slice 0 policy/test foundation; operational integration in Slice 1; endpoint enforcement in every later slice |
+| Approved decisions | Allow-listed capability vocabulary; typed scopes; Firestore authorization authority; limited custom claims; versioned propagation; separate bounded scoped projection; ordered default-deny evaluator; refined role/revocation behavior; authorization-pending offline capture; bounded redacted audit; staged security test gates |
 | Decision references | ADR 0010, ADR 0014 |
 | Related contracts | [Identity and Session](identity-session-contract.md), [Roles and Permissions](roles-permissions.md), [Assignment Model](assignment-model.md), [Offline Synchronization](offline-sync.md) |
 
@@ -51,6 +52,10 @@ interface AuthorizationProjection {
   expiresAt: string;
 }
 
+interface AuthorizationProjectionResponse {
+  data: AuthorizationProjection;
+}
+
 type Capability =
   | "scouting.match.capture"
   | "scouting.match.capture_manual"
@@ -82,9 +87,49 @@ type Capability =
 
 The vocabulary is allow-listed and versioned in code and contract tests. New capability names require review; arbitrary strings do not become effective grants.
 
+## Scoped authorization projection
+
+`GET /api/scouting/v2/authorization` requires the HttpOnly session cookie and `Accept: application/json`; it has no body, query parameters, or CSRF requirement because it is a safe read. It returns only the authenticated UID's bounded projection. The server derives the UID from the verified session; the request accepts no target UID, team, role, grant, or scope selector. A representative response is:
+
+```json
+{
+  "data": {
+    "schemaVersion": 1,
+    "uid": "firebase-uid",
+    "teamNumber": 3464,
+    "authorizationVersion": 12,
+    "roles": ["Scout"],
+    "grants": [
+      {
+        "grantId": "grant-123",
+        "capability": "scouting.match.capture",
+        "scope": {
+          "type": "assignment",
+          "assignmentId": "assignment-123"
+        },
+        "effect": "allow",
+        "validFrom": "2026-07-24T12:00:00.000Z",
+        "reason": "Event assignment",
+        "version": 12
+      }
+    ],
+    "generatedAt": "2026-07-24T12:00:01.000Z",
+    "expiresAt": "2026-07-24T12:05:01.000Z"
+  }
+}
+```
+
+The response uses `Content-Type: application/json`, `Cache-Control: no-store`, the common safe request ID, and a maximum encoded size of 32 KiB. It contains no Firebase token, cookie, custom-claim payload, evaluator trace, other user's grants, internal deny rationale, or secret. The example timestamps are illustrative; projection TTL remains an engineering-measured bounded value. If bounded grants cannot fit, the server must fail explicitly until a separately approved pagination design exists; it must not silently truncate effective authorization.
+
+The browser uses the projection for workspace/action composition and offline authorization-pending UX only. It may persist the last validated projection as UID-partitioned application data for offline display, despite prohibiting HTTP caching; the record retains `authorizationVersion`, `generatedAt`, and `expiresAt`, is inaccessible to other signed-in UIDs through application behavior, and is never server authority. Account switch clears it from memory. Expired or mismatched projections cannot enable new local actions beyond separately downloaded assignment policy.
+
+Refresh occurs after login/reauthentication, session restoration, authorization-version mismatch, visibility/reconnect signals, an authoritative authorization denial, or projection expiry while online. Projection refresh does not renew the session. If projection loading fails, protected UI and server work fail closed while same-UID local evidence remains preserved.
+
 ## Lifecycle and invariants
 
 - Firestore membership/grant records are canonical. Every policy change increments `authorizationVersion` atomically and emits audit.
+- An ordinary role/grant change does not automatically terminate the Firebase session. Current backend evaluation removes or adds effective access, and the version mismatch forces projection refresh.
+- Membership suspension/revocation, lost-device response, or suspected compromise denies application capabilities and may revoke Firebase sessions through the approved Administrator/operations procedure.
 - Custom claims may cache only a compact authorization-version hint; `debug` grants nothing.
 - Grants expire by server time. Missing, inactive, suspended, or revoked membership denies all application capabilities. Membership cannot become active until the backend confirms Firebase `emailVerified`; a client field is never sufficient.
 - Deny overrides allow; more specific allow never defeats a matching deny.
@@ -110,7 +155,7 @@ Validate membership state, vocabulary, scope shape and containment, time bounds,
 
 ## Storage, indexes, and retention
 
-Recommended logical records are team memberships plus separately bounded grants and immutable policy audit entries. Index UID/state, team/state, authorization version, capability/scope identifiers, validity window, and target. Projection response maximum is 32 KiB; page larger grant sets. Cache TTL is an engineering-measured value, never longer than projection expiry, and sensitive/sync/version-mismatch decisions bypass it. Retention follows the common operational contract.
+Recommended logical records are team memberships plus separately bounded grants and immutable policy audit entries. Index UID/state, team/state, authorization version, capability/scope identifiers, validity window, and target. Projection response maximum is 32 KiB. An oversized projection fails explicitly and is never truncated; pagination requires a later approved contract amendment. Cache TTL is an engineering-measured value, never longer than projection expiry, and sensitive/sync/version-mismatch decisions bypass it. Retention follows the common operational contract.
 
 ## Capabilities and security
 
@@ -124,6 +169,76 @@ Recommended logical records are team memberships plus separately bounded grants 
 Role bundle expansion is defined normatively in Roles and Permissions. Manual emergency capture requires a Lead Scout-created/approved assignment; Scouts do not self-grant `capture_manual`.
 
 ## Policy evaluation
+
+Every route has exactly one runtime-validated declaration registered with it. Public and health endpoints must be explicitly marked; omission never means public. The declaration model is:
+
+```ts
+type OwnershipRule =
+  | "none"
+  | "own"
+  | "own_or_privileged";
+
+type AssignmentRule =
+  | "none"
+  | "active_assignment"
+  | "current_or_former_assignment_with_conflict";
+
+type RecentAuthenticationRule =
+  | "not_required"
+  | "required"
+  | "required_for_other_owner";
+
+type AuditRule =
+  | "none"
+  | "sensitive_read"
+  | "privileged_mutation"
+  | "receipt_trace";
+
+interface EndpointAuthorizationPolicy {
+  policyId: string;
+  access: "protected";
+  anyOfCapabilities: Array<Capability | "authenticated">;
+  allowedScopeTypes: AuthorizationScope["type"][];
+  ownershipRule: OwnershipRule;
+  assignmentRule: AssignmentRule;
+  allowedResourceStates?: string[];
+  recentAuthentication: RecentAuthenticationRule;
+  audit: AuditRule;
+  authoritativeRead:
+    | "always"
+    | "sensitive_sync_or_version_mismatch";
+}
+
+interface PublicEndpointPolicy {
+  policyId: string;
+  access: "public";
+  securityProfile:
+    | "health"
+    | "pre_auth_read"
+    | "pre_auth_mutation";
+}
+
+type EndpointPolicyDeclaration =
+  | EndpointAuthorizationPolicy
+  | PublicEndpointPolicy;
+
+interface AuthorizationDecision {
+  outcome: "allow" | "deny";
+  policyId: string;
+  authorizationVersion: number;
+  denialCode?:
+    | "CAPABILITY_DENIED"
+    | "SCOPE_DENIED"
+    | "ASSIGNMENT_REQUIRED"
+    | "RECENT_AUTHENTICATION_REQUIRED"
+    | "AUTHORIZATION_VERSION_STALE"
+    | "AUTHORIZATION_UNAVAILABLE";
+}
+```
+
+`AuthorizationDecision` is server-internal. Clients receive only the common bounded error envelope. They never receive matching-grant traces, protected-resource existence, internal cache state, or evaluator reasoning.
+
+Public declarations do not bypass security controls. `pre_auth_mutation` requires the Identity and Session contract's pre-auth CSRF binding, exact-Origin validation, input limits, enumeration resistance where applicable, and an explicit rate-limit profile. `pre_auth_read` remains bounded and non-sensitive. `health` exposes only the approved liveness/readiness projection and no configuration or dependency secrets.
 
 For each endpoint, execute:
 
@@ -139,13 +254,19 @@ For each endpoint, execute:
 
 Policy input/output is structured and testable. Public denials disclose an actionable category without protected resource existence or evaluator internals.
 
+Route construction/startup fails when a protected endpoint has no declaration, a declaration names an unknown capability/scope, or its recent-authentication/audit requirements contradict the endpoint contract. CI enumerates registered routes and contract policy rows bidirectionally: every route has exactly one effective declaration and every declared policy maps to a route. A frontend route guard, role label, `debug`, cached projection, or handler-local check cannot replace this evaluator.
+
+The evaluator runs before business mutation. Required privileged audit must be durably committed with the mutation when the datastore boundary permits; otherwise a durable audit intent must be established before success is returned. If required audit cannot be secured, the privileged mutation fails without partial success. Denied requests may emit a bounded security event, but logs never contain evaluator traces or protected payloads.
+
+Recent authentication is server-authoritative and passes only when `authenticatedAt` is no more than 15 minutes old. It is required for role changes, package publication, event overrides, correction or voiding of another Scout's evidence, identifiable exports, audit access, Administrator/operations emergency revocation, and destructive cleanup. It is never inferred from an expiry warning or frontend route and never interrupts ordinary active capture.
+
 ## API
 
 | Method | Endpoint | Capability | Scope | Recent authentication | Audit |
 |---|---|---|---|:---:|:---:|
 | GET | `/api/scouting/v2/authorization` | authenticated | own projection | No | No |
 | GET | `/api/scouting/v2/seasons/:seasonKey/active` | `scouting.packages.season.read` | season | No | No |
-| POST | `/api/scouting/v2/admin/seasons/:seasonKey/drafts` | `scouting.packages.season.manage_draft` | global/season | Yes | Yes |
+| POST | `/api/scouting/v2/admin/seasons/:seasonKey/drafts` | `scouting.packages.season.manage_draft` | global/season | No | Yes |
 | POST | `/api/scouting/v2/admin/seasons/:seasonKey/publish` | `scouting.packages.season.publish` | global/season | Yes | Yes |
 | GET | `/api/scouting/v2/events/:eventKey/package` | `scouting.packages.event.read` | event | No | No |
 | POST | `/api/scouting/v2/events/:eventKey/refresh` | `scouting.packages.event.refresh` | event | No | Yes |
@@ -195,9 +316,37 @@ Local capture and queueing use cached assignment/projection only as a UX policy 
 
 Another user never reads or uploads the owner UID's queued work. Authorization rejection is not schema rejection and does not trigger deletion.
 
+Offline authorization-pending capture is limited to previously downloaded assignments/packages and the original UID's partition. It cannot create assignments, change policy, publish packages, override event data, perform privileged corrections, request exports, or access audit. Permission removal never reattributes queued work; any later evidence-recovery workflow preserves the original Scout UID and requires its own approved capability and audit.
+
 ## Audit, observability, performance, and accessibility
 
-Audit login/logout/revocation links, membership/role/capability/scope changes, sensitive reauthentication, assignment/emergency changes, corrections/voids, publication/override, exports, audit access, and destructive cleanup. Required fields are actor UID, target, action, capability, scope, decision/outcome, reason, old/new version or bounded diff, request/correlation ID, and server timestamp. Redact credentials, cookies, tokens, CSRF material, service-account data, notes, and unnecessary personal data.
+```ts
+interface AuthorizationAuditEvent {
+  auditEventId: string;
+  eventType: string;
+  actorUid: string;
+  targetType: string;
+  targetId: string;
+  capability?: Capability;
+  scope?: AuthorizationScope;
+  outcome: "allowed" | "denied" | "failed";
+  reason?: string;
+  priorVersion?: number;
+  newVersion?: number;
+  boundedDiff?: Record<string, unknown>;
+  resultCount?: number;
+  requestId: string;
+  environment: string;
+  occurredAt: string;
+  expiresAt: string;
+}
+```
+
+Audit login/logout/revocation links, membership/role/capability/scope changes, sensitive reauthentication, assignment/emergency changes, corrections/voids, publication/override, exports, audit access, and destructive cleanup. Every event requires actor UID, target, event type, outcome, request/correlation ID, environment, and server time. Capability and scope are required when an application policy decision exists; a reason and old/new version or bounded diff are required for privileged governance changes. Redact credentials, cookies, tokens, CSRF material, service-account data, notes, and unnecessary personal data.
+
+Sensitive privileged reads, including Administrator raw-record access, are audited once per bounded request/page with target/query class and result count rather than copying each returned record. Ordinary own-record reads, routine authorized analytics, and rapid capture actions do not create security-audit records. Event-related audit expires under the approved 14-day post-event policy; legal hold or an active incident may suspend deletion.
+
+Required privileged mutation audit is committed atomically with the mutation when possible or secured as a durable audit intent before success. Required sensitive reads and privileged mutations fail closed when audit evidence cannot be established. Audit never contains full scouting payloads, Scout notes, credentials, cookies, tokens, CSRF material, verification/reset codes, service-account data, photo content, or evaluator traces.
 
 Metrics cover allow/deny by policy category, lookup/cache latency, stale-version frequency, propagation lag, unavailable decisions, and rejected-outbox recovery. Denial UX differentiates authentication, permission, scope, assignment, freshness, conflict, and outage without revealing inaccessible data.
 
@@ -230,6 +379,14 @@ Metrics cover allow/deny by policy category, lookup/cache latency, stale-version
 
 Unit tests cover vocabulary, scope containment, deny precedence, evaluator order, and errors. API integration tests cover middleware and audit. Firebase/Firestore emulator tests cover revocation, memberships, versions, and concurrent changes. Browser tests cover shared-device/offline state. End-to-end tests cover assignment through receipt and revocation/recovery.
 
+### Staged security delivery gates
+
+Slice 0 must pass runtime-schema, vocabulary, scope-containment, deny-precedence, evaluator-order, route-registry completeness, missing-policy denial, safe-error, Firestore membership/grant fixture, authorization-version mutation, cache-invalidation, and `debug`-grants-nothing tests. It must establish executable helpers and fixtures for later slices; tests requiring features not yet implemented do not block Slice 0.
+
+Slice 1 must pass session-cookie, expired/revoked/disabled/deleted identity, CSRF/Origin, session/projection schema, same-UID reauthentication, account switching, UID isolation, zero-privilege registration, verification gate, non-enumerating recovery, projection mismatch/refresh, authority outage, role-removal propagation, browser-local logout, emergency revocation, and approved expiry/warning/freshness boundary tests.
+
+Every later endpoint-owning slice must pass its direct-API policy matrix, including wrong capability, scope, event, team, assignment, owner, resource state, expected version, deny precedence, recent authentication, audit success/failure, rate/payload limits, idempotency where applicable, and offline rejection/evidence-preservation behavior. Representative browser/end-to-end coverage includes two-user shared-device isolation, offline restart/reconnect, offline reassignment, queued work during role removal, authority/audit outage, assignment-to-receipt, and revocation/recovery.
+
 ## Deferred decisions
 
-Product owner must approve the vocabulary, separately fetched scoped projection, and authorization-pending offline capture. Engineering must measure and document cache TTL, propagation target, Firestore indexes, policy outage behavior, and maximum projection/grant counts. Multi-team tenancy requires a future amendment.
+No product-owner or principal-architect approval remains open in this contract. Engineering must measure and document projection/cache TTL, propagation target, Firestore indexes, policy/audit outage behavior, audit volume and quota use, maximum projection/grant counts, and route-registry completeness, then pass the staged gates in the owning slices. Multi-team tenancy requires a future amendment.
